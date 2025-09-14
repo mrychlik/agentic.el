@@ -396,8 +396,8 @@ Show results table in *gptel-probe* buffer (OK or API error)."
     (setq-local header-line-format title)
     (when (fboundp 'yas-minor-mode) (yas-minor-mode 1))
     (message "Edit prompt. C-c C-c to send, C-c C-k to cancel.")))
-;;;###autoload
 
+;;;###autoload
 (defun agentic/gpt-compose-patch ()
   "Open a buffer to compose a PATCH prompt (yas + multi-line)."
   (interactive)
