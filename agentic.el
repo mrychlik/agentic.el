@@ -32,7 +32,18 @@
 (unless (require 'ghub nil t)
   (user-error "Package 'ghub' is required for opening PRs (install ghub)."))
 
-(require 'gptel)
+;;(require 'gptel)
+;; Optional autoloads (not strictly required, but nice for byte-compile)
+(autoload 'gptel "gptel")
+;; (declare-function gptel-request "gptel") ;; add similar declares if you call internals
+
+(defun agentic--ensure-gptel ()
+  "Ensure gptel is available or signal a friendly error."
+  (unless (featurep 'gptel)
+    (unless (require 'gptel nil t)
+      (user-error "agentic.el: this command needs the 'gptel' package. Install gptel first."))))
+
+
 (require 'magit)
 ;;(require 'forge)
 (autoload 'forge-get-repository "forge")
