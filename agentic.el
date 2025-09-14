@@ -327,7 +327,7 @@ API via ghub."
   "Probe MODELS (symbols) with a tiny request via current gptel-backend.
 Show results table in *gptel-probe* buffer (OK or API error)."
   (interactive)
-  (require 'gptel)
+  (agentic--ensure-gptel)
   (let* ((candidates (or models
                          '(gpt-4o-mini gpt-4o gpt-4.1 gpt-4.1-mini gpt-4 gpt-3.5-turbo)))
          (results '())
@@ -584,6 +584,7 @@ LIMIT is number of rows to show (default 20)."
 
 (defun agentic/gptel-use (m)
   (interactive)
+  (agentic--ensure-gptel)
   (setq gptel-model m)
   (message "gptel-model ⇒ %s" m))
 
