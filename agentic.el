@@ -28,10 +28,15 @@
 ;;; Code:
 
 (require 'package)
-(require 'ghub)   ;; for GitHub API calls (used by Forge)
+;;(require 'ghub)   ;; for GitHub API calls (used by Forge)
+(unless (require 'ghub nil t)
+  (user-error "Package 'ghub' is required for opening PRs (install ghub)."))
+
 (require 'gptel)
 (require 'magit)
-(require 'forge)
+;;(require 'forge)
+(autoload 'forge-get-repository "forge")
+(autoload 'forge-add-repository "forge")
 (require 'project "proj_GWvKyyGvSx7mq62LFbgyTFpl" t)   ;; optional but helpful
 
 ;; Pick a model string your gptel supports right now.
