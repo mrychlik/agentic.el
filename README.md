@@ -1,3 +1,5 @@
+![CI](https://github.com/mrychlik/agentic.el/actions/workflows/elisp-ci.yml/badge.svg)
+
 # agentic.el
 
 **Agentic workflows for Emacs** — use GPT (via [gptel]) to rewrite buffers, generate **unified diffs** for your repo, apply them with Git, and open PRs with [Forge]. Great for teaching AI/Data Science: from **prompt → patch → PR** — with you in control via Magit.
