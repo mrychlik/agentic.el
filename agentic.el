@@ -37,7 +37,7 @@
 ;;(require 'forge)
 (autoload 'forge-get-repository "forge")
 (autoload 'forge-add-repository "forge")
-(require 'project) 
+(require 'project)
 
 ;; Pick a model string your gptel supports right now.
 ;; If "gpt-5" isn’t recognized in your build, test with one of these and switch later:
