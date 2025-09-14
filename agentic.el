@@ -602,5 +602,21 @@ LIMIT is number of rows to show (default 20)."
     m)
   "Keymap for `agentic-mode`.")
 
+;;;###autoload
+
+
+(define-minor-mode agentic-mode
+  "Agentic LLM workflows in Emacs.
+When enabled, provides keybindings under `C-c g` for agent-driven rewrites,
+repo patches, and Git/Forge helpers."
+  :lighter " Agentic"
+  :keymap agentic-mode-map)
+
+;;;###autoload
+
+
+(define-globalized-minor-mode global-agentic-mode
+  agentic-mode
+  (lambda () (agentic-mode 1)))
 (provide 'agentic)
 ;;; agentic.el ends here
