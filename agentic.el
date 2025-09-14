@@ -107,6 +107,7 @@
 (defun agentic/gpt-rewrite (instruction)
   "Rewrite the active region (or whole buffer) per INSTRUCTION using GPT-5."
   (interactive "sRewrite instruction: ")
+  (agentic--ensure-gptel)
   (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
          (end (if (use-region-p) (region-end)       (point-max)))
          (original (buffer-substring-no-properties beg end))
