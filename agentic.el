@@ -86,7 +86,6 @@
       default-directory))
 
 ;; -- 1) Rewrite region/buffer with GPT-5 ----------------------------
-;;;###autoload
 ;;; Replace the whole agentic/gpt-rewrite with this:
 ;;;###autoload
 (defun agentic/gpt-rewrite (instruction)
@@ -114,9 +113,9 @@
 
 ;; -- 2) Ask GPT-5 for a unified diff and apply it -------------------
 
-;;;###autoload
 ;;;; Ergonomic “ask for patch → auto-apply” (no buffer overwrite)
 
+;;;###autoload
 (defvar agentic/gpt-last-patch-file nil
   "Path to the last patch written by agentic/gpt-patch-apply.")
 
@@ -141,8 +140,8 @@
   (or (ignore-errors (project-root (project-current)))
       (locate-dominating-file default-directory ".git")
       default-directory))
-;;;###autoload
 
+;;;###autoload
 (defun agentic/gpt-patch-apply (prompt)
   "Ask the model for a unified diff and auto-apply it to the repo.
 No preview buffer; uses git apply with safety checks."
@@ -227,7 +226,6 @@ No preview buffer; uses git apply with safety checks."
     safe))
 
 ;;;###autoload
-;;;###autoload
 (defun agentic/git-make-safe-branch (prefix)
   "Create and switch to a safe, timestamped branch from PREFIX (no
 interactive Magit calls)."
@@ -252,9 +250,8 @@ interactive Magit calls)."
   (if (= 0 (magit-call-git "commit" "-m" msg))
       (message "Committed: %s" msg)
     (user-error "Nothing to commit (or commit failed)")))
+
 ;;;###autoload
-
-
 (defun agentic/git-push-current ()
   "Push current branch, setting upstream if needed (plumbing only)."
   (interactive)
@@ -280,7 +277,6 @@ interactive Magit calls)."
   t)
 
 ;; -- 4) Forge: open a PR from Emacs --------------------------------
-;;;###autoload
 ;;;###autoload
 (defun agentic/forge-open-pr (title body)
   "Open a PR for the current branch against the default branch using GitHub
@@ -308,7 +304,6 @@ API via ghub."
           (when html-url (browse-url html-url)))))))
 
 ;;; Probe which OpenAI models this project key can use (no fallbacks added).
-;;;###autoload
 ;;;###autoload
 (defun agentic/gptel-probe-models (&optional models)
   "Probe MODELS (symbols) with a tiny request via current gptel-backend.
@@ -354,7 +349,6 @@ Show results table in *gptel-probe* buffer (OK or API error)."
       (message "Probing models… %S" candidates)
       (step candidates))))
 
-;;;###autoload
 ;;;###autoload
 (defun agentic/yas-expand-by-key (key &optional mode)
   "Expand yasnippet with KEY for MODE (defaults to `major-mode')."
