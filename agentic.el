@@ -413,6 +413,7 @@ Show results table in *gptel-probe* buffer (OK or API error)."
 (defun agentic/gpt-compose-patch ()
   "Open a buffer to compose a PATCH prompt (yas + multi-line)."
   (interactive)
+  (agentic--ensure-gptel)
   (agentic/gpt--compose-pop
    "GPT PATCH — C-c C-c to submit"
    'patch
