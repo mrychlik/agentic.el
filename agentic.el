@@ -1,9 +1,9 @@
-;;; ua-gpt5-dev.el --- GPT-5 + Magit/Forge workflow in pure Elisp -*- lexical-binding: t; -*-
+;;; agentic.el --- Agentic LLM workflow in Emacs -*- lexical-binding: t; -*-
 ;; Author: Marek Rychlik (with AI assist)
 ;; Version: 0.1
 ;; Keywords: tools, git, ai
 ;; Package-Requires: ((emacs "27.1"))
-;; URL: (local)
+;; URL: https://github.com/mrychlik/agentic.el
 
 ;;; Commentary:
 ;; A light module that wires GPT-5 (via gptel) into an Emacs/Magit workflow:
@@ -56,14 +56,14 @@
 (setq gptel-model 'gpt-5-mini)
 
 ;; -- Customization --------------------------------------------------
-(defgroup ua-gpt5-dev nil
+(defgroup agentic nil
   "GPT-5 + Magit/Forge helpers."
   :group 'tools)
 
 (defcustom ua/gpt-system-prompt
   "You are a senior engineer and applied mathematician. Return only the revised code/text unless asked for a diff."
   "System instruction for rewrite requests."
-  :type 'string :group 'ua-gpt5-dev)
+  :type 'string :group 'agentic)
 
 ;; -- Utilities ------------------------------------------------------
 (defun ua/project-root ()
@@ -569,5 +569,11 @@ LIMIT is number of rows to show (default 20)."
 
 
 
-(provide 'ua-gpt5-dev)
-;;; ua-gpt5-dev.el ends here
+(provide 'agentic)
+
+(define-minor-mode agentic-mode ... )
+(define-globalized-minor-mode global-agentic-mode agentic-mode (lambda () (agentic-mode 1)))
+
+
+
+;;; agentic.el ends here
