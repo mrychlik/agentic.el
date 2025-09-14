@@ -415,8 +415,8 @@ Show results table in *gptel-probe* buffer (OK or API error)."
     "--- /dev/null\n"
     "+++ b/\n"
     "@@\n")))
-;;;###autoload
 
+;;;###autoload
 (defun agentic/gpt-compose-rewrite ()
   "Open a buffer to compose a REWRITE prompt (yas + multi-line)."
   (interactive)
@@ -428,14 +428,14 @@ Show results table in *gptel-probe* buffer (OK or API error)."
     "- Keep behavior the same (unless specified)\n"
     "- Improve clarity, add docstring, keep style consistent\n"
     "- Return only RAW code (no markdown fences or prose)\n\n")))
-;;;###autoload
 
+;;;###autoload
 (defun agentic/gpt-compose-cancel ()
   (interactive)
   (kill-buffer agentic/gpt-compose-buffer-name)
   (message "Canceled."))
-;;;###autoload
 
+;;;###autoload
 (defun agentic/gpt-compose-submit ()
   "Submit the composed request using your existing GPT functions."
   (interactive)
