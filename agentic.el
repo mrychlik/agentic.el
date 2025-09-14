@@ -566,8 +566,8 @@ LIMIT is number of rows to show (default 20)."
   (define-key magit-status-mode-map (kbd "C-c s a") #'agentic/git-top-authors)
   (define-key magit-status-mode-map (kbd "C-c s b") #'agentic/git-bus-factor)
   (define-key magit-status-mode-map (kbd "C-c s f") #'agentic/git-file-owners))
-;;;###autoload
 
+;;;###autoload
 
 (defun agentic/gptel-use (m)
   (interactive)
@@ -603,7 +603,6 @@ LIMIT is number of rows to show (default 20)."
   "Keymap for `agentic-mode`.")
 
 ;;;###autoload
-
 
 (define-minor-mode agentic-mode
   "Agentic LLM workflows in Emacs.
