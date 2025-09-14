@@ -571,7 +571,9 @@ LIMIT is number of rows to show (default 20)."
 
 (provide 'agentic)
 
+;;;###autoload
 (define-minor-mode agentic-mode ... )
+;;;###autoload
 (define-globalized-minor-mode global-agentic-mode agentic-mode (lambda () (agentic-mode 1)))
 
 
