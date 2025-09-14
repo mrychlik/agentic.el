@@ -1,10 +1,21 @@
-;;; agentic.el --- Agentic LLM workflow in Emacs -*- lexical-binding: t; -*-
+;;; agentic.el --- Agentic LLM workflows in Emacs -*- lexical-binding: t; -*-
 ;; Author: Marek Rychlik (with AI assist)
-;; Version: 0.1
+;; Version: 0.2
 ;; Keywords: tools, git, ai
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "27.1") (gptel "0.9") (magit "3.3") (forge "0.4") (transient "0.5") (yasnippet "0.14"))
 ;; URL: https://github.com/mrychlik/agentic.el
+;; License: MIT
+;; SPDX-License-Identifier: MIT
 
+;;; Commentary:
+;; Agentic editing in Emacs with GPT (via gptel) + Magit/Forge:
+;; - Rewrite buffers/regions.
+;; - Request a unified diff for the repo and apply with git.
+;; - Create a safe branch, commit, push, and open a PR via Forge.
+;; Keep OPENAI_API_KEY in your shell env. First time per repo with Forge:
+;; M-x forge-add-repository (authenticate to GitHub).
+
+;;; Code:
 ;;; Commentary:
 ;; A light module that wires GPT-5 (via gptel) into an Emacs/Magit workflow:
 ;; - Ask GPT-5 to rewrite a region/buffer.
@@ -58,7 +69,7 @@
 ;; -- Customization --------------------------------------------------
 (defgroup agentic nil
   "GPT-5 + Magit/Forge helpers."
-  :group 'tools)
+  :group 'agentic)
 
 (defcustom agentic/gpt-system-prompt
   "You are a senior engineer and applied mathematician. Return only the revised code/text unless asked for a diff."
@@ -77,6 +88,7 @@
 ;; -- 1) Rewrite region/buffer with GPT-5 ----------------------------
 ;;;###autoload
 ;;; Replace the whole agentic/gpt-rewrite with this:
+;;;###autoload
 (defun agentic/gpt-rewrite (instruction)
   "Rewrite the active region (or whole buffer) per INSTRUCTION using GPT-5."
   (interactive "sRewrite instruction: ")
@@ -108,7 +120,7 @@
 (defvar agentic/gpt-last-patch-file nil
   "Path to the last patch written by agentic/gpt-patch-apply.")
 
-(defun ua--strip-code-fences (s)
+(defun agentic--strip-code-fences (s)
   "Remove Markdown code fences from S if present."
   (let ((str s))
     (when (string-match "\\`[ \t\r\n]*```\\(?:[[:alpha:]-]+\\)?[ \t\r\n]*" str)
@@ -117,7 +129,7 @@
       (setq str (substring str 0 (match-beginning 0))))
     str))
 
-(defun ua--require-diff (s)
+(defun agentic--require-diff (s)
   "Return substring of S starting at first unified-diff header, or error."
   (let* ((rx "^diff --git[ \t]+a/")
          (idx (string-match rx s)))
@@ -129,6 +141,7 @@
   (or (ignore-errors (project-root (project-current)))
       (locate-dominating-file default-directory ".git")
       default-directory))
+;;;###autoload
 
 (defun agentic/gpt-patch-apply (prompt)
   "Ask the model for a unified diff and auto-apply it to the repo.
@@ -148,8 +161,8 @@ No preview buffer; uses git apply with safety checks."
      (lambda (resp info)
        (unless (and resp (stringp resp))
          (user-error "No patch text returned: %s" (plist-get info :error)))
-       (setq resp (ua--strip-code-fences resp))
-       (setq resp (ua--require-diff resp))
+       (setq resp (agentic--strip-code-fences resp))
+       (setq resp (agentic--require-diff resp))
        (let ((patch-file (make-temp-file "gpt5-" nil ".patch")))
          (setq agentic/gpt-last-patch-file patch-file)
          (with-temp-file patch-file (insert resp))
@@ -174,6 +187,7 @@ No preview buffer; uses git apply with safety checks."
              (user-error "Patch conflicted → .rej files created. Resolve & stage manually.")))))))))
 
 ;; Optional: a “preview” variant if you ever want to inspect raw diff.
+;;;###autoload
 (defun agentic/gpt-patch-preview (prompt)
   "Ask for a unified diff and show it in a temp buffer (no apply)."
   (interactive "sGPT patch request (preview): ")
@@ -192,7 +206,7 @@ No preview buffer; uses git apply with safety checks."
        (let ((buf (get-buffer-create "*GPT Patch Preview*")))
          (with-current-buffer buf
            (erase-buffer)
-           (insert (ua--require-diff (ua--strip-code-fences resp)))
+           (insert (agentic--require-diff (agentic--strip-code-fences resp)))
            (diff-mode))
          (pop-to-buffer buf)
          (message "Preview only. To apply: git apply %s (last saved)."
@@ -213,6 +227,7 @@ No preview buffer; uses git apply with safety checks."
     safe))
 
 ;;;###autoload
+;;;###autoload
 (defun agentic/git-make-safe-branch (prefix)
   "Create and switch to a safe, timestamped branch from PREFIX (no
 interactive Magit calls)."
@@ -226,6 +241,7 @@ interactive Magit calls)."
     ;; git checkout -b <branch> <base>
     (magit-call-git "checkout" "-b" branch base)
     (message "Switched to new branch: %s" branch)))
+;;;###autoload
 
 (defun agentic/git-commit-all (msg)
   "Stage all changes and commit with MSG using plumbing."
@@ -236,6 +252,7 @@ interactive Magit calls)."
   (if (= 0 (magit-call-git "commit" "-m" msg))
       (message "Committed: %s" msg)
     (user-error "Nothing to commit (or commit failed)")))
+;;;###autoload
 
 
 (defun agentic/git-push-current ()
@@ -264,6 +281,7 @@ interactive Magit calls)."
 
 ;; -- 4) Forge: open a PR from Emacs --------------------------------
 ;;;###autoload
+;;;###autoload
 (defun agentic/forge-open-pr (title body)
   "Open a PR for the current branch against the default branch using GitHub
 API via ghub."
@@ -290,6 +308,7 @@ API via ghub."
           (when html-url (browse-url html-url)))))))
 
 ;;; Probe which OpenAI models this project key can use (no fallbacks added).
+;;;###autoload
 ;;;###autoload
 (defun agentic/gptel-probe-models (&optional models)
   "Probe MODELS (symbols) with a tiny request via current gptel-backend.
@@ -336,6 +355,7 @@ Show results table in *gptel-probe* buffer (OK or API error)."
       (step candidates))))
 
 ;;;###autoload
+;;;###autoload
 (defun agentic/yas-expand-by-key (key &optional mode)
   "Expand yasnippet with KEY for MODE (defaults to `major-mode')."
   (interactive "sSnippet key: ")
@@ -376,6 +396,7 @@ Show results table in *gptel-probe* buffer (OK or API error)."
     (setq-local header-line-format title)
     (when (fboundp 'yas-minor-mode) (yas-minor-mode 1))
     (message "Edit prompt. C-c C-c to send, C-c C-k to cancel.")))
+;;;###autoload
 
 (defun agentic/gpt-compose-patch ()
   "Open a buffer to compose a PATCH prompt (yas + multi-line)."
@@ -394,6 +415,7 @@ Show results table in *gptel-probe* buffer (OK or API error)."
     "--- /dev/null\n"
     "+++ b/\n"
     "@@\n")))
+;;;###autoload
 
 (defun agentic/gpt-compose-rewrite ()
   "Open a buffer to compose a REWRITE prompt (yas + multi-line)."
@@ -406,11 +428,13 @@ Show results table in *gptel-probe* buffer (OK or API error)."
     "- Keep behavior the same (unless specified)\n"
     "- Improve clarity, add docstring, keep style consistent\n"
     "- Return only RAW code (no markdown fences or prose)\n\n")))
+;;;###autoload
 
 (defun agentic/gpt-compose-cancel ()
   (interactive)
   (kill-buffer agentic/gpt-compose-buffer-name)
   (message "Canceled."))
+;;;###autoload
 
 (defun agentic/gpt-compose-submit ()
   "Submit the composed request using your existing GPT functions."
@@ -455,7 +479,7 @@ LIMIT is number of rows to show (default 20)."
     (let* ((rows (if limit (cl-subseq rows 0 (min limit (length rows))) rows))
            (buf (get-buffer-create "*Git Top Authors*")))
       (with-current-buffer buf
-        (ua--tablist-mode "Top Authors (commits)"
+        (agentic--tablist-mode "Top Authors (commits)"
                           '(("Commits" 10 t) ("Author" 50 t))
                           rows)
         (tabulated-list-print t)
@@ -471,7 +495,7 @@ LIMIT is number of rows to show (default 20)."
         (goto-char (point-min)))
       (pop-to-buffer buf))))
 
-(defun ua--tablist-mode (title columns rows)
+(defun agentic--tablist-mode (title columns rows)
   "Internal helper to show ROWS in tabulated-list."
   (setq-local tabulated-list-format (vconcat (mapcar (lambda (c)
                                                        (list (nth 0 c) (nth 1 c) (nth 2 c)))
@@ -481,6 +505,7 @@ LIMIT is number of rows to show (default 20)."
   (setq header-line-format title))
 
 ;; ---------- Bus factor (≈ authors covering ~80% commits) ----------
+;;;###autoload
 (defun agentic/git-bus-factor (&optional since branch threshold)
   "Approximate bus factor: minimal authors covering THRESHOLD (default 0.8) of commits."
   (interactive
@@ -509,6 +534,7 @@ LIMIT is number of rows to show (default 20)."
              (if (string-empty-p since) "" (format " since %s" since)))))
 
 ;; ---------- File ownership (blame shares) ----------
+;;;###autoload
 (defun agentic/git-file-owners (&optional file)
   "Show blame-based line ownership for FILE (default current buffer)."
   (interactive)
@@ -540,6 +566,7 @@ LIMIT is number of rows to show (default 20)."
   (define-key magit-status-mode-map (kbd "C-c s a") #'agentic/git-top-authors)
   (define-key magit-status-mode-map (kbd "C-c s b") #'agentic/git-bus-factor)
   (define-key magit-status-mode-map (kbd "C-c s f") #'agentic/git-file-owners))
+;;;###autoload
 
 
 (defun agentic/gptel-use (m)
@@ -549,33 +576,34 @@ LIMIT is number of rows to show (default 20)."
 
 ;; -- Keybindings (you can change these) ----------------------------
 
-(global-set-key (kbd "C-c g 5") (lambda () (interactive) (agentic/gptel-use 'gpt-5)))
-(global-set-key (kbd "C-c g o") (lambda () (interactive) (agentic/gptel-use 'gpt-4o)))
-(global-set-key (kbd "C-c g m") (lambda () (interactive) (agentic/gptel-use 'gpt-4o-mini)))
 
 
 ;; -- Core keybindings (you can change these) ----------------------------
 
-(global-set-key (kbd "C-c g r") #'agentic/gpt-rewrite)
-(global-set-key (kbd "C-c g b") #'agentic/git-make-safe-branch)
-(global-set-key (kbd "C-c g c") #'agentic/git-commit-all)
-(global-set-key (kbd "C-c g u") #'agentic/git-push-current)
-(global-set-key (kbd "C-c g R") #'agentic/forge-open-pr)
-(global-set-key (kbd "C-c g p") #'agentic/gpt-patch-apply)   ;; auto-apply, no buffer overwrite
-(global-set-key (kbd "C-c g P") #'agentic/gpt-patch-preview) ;; preview-only when you want it
 ;; Keybindings: use composer instead of minibuffer for new requests
-(global-set-key (kbd "C-c g C") #'agentic/gpt-compose-patch)   ;; compose PATCH
-(global-set-key (kbd "C-c g W") #'agentic/gpt-compose-rewrite) ;; compose REWRITE
 
 
+
+;; Minor mode keymap
+(defvar agentic-mode-map
+  (let ((m (make-sparse-keymap)))
+    (define-key m (kbd "C-c g 5") (lambda () (interactive) (agentic/gptel-use 'gpt-5)))
+    (define-key m (kbd "C-c g o") (lambda () (interactive) (agentic/gptel-use 'gpt-4o)))
+    (define-key m (kbd "C-c g m") (lambda () (interactive) (agentic/gptel-use 'gpt-4o-mini)))
+    (define-key m (kbd "C-c g r") #'agentic/gpt-rewrite)
+    (define-key m (kbd "C-c g b") #'agentic/git-make-safe-branch)
+    (define-key m (kbd "C-c g c") #'agentic/git-commit-all)
+    (define-key m (kbd "C-c g u") #'agentic/git-push-current)
+    (define-key m (kbd "C-c g R") #'agentic/forge-open-pr)
+    (define-key m (kbd "C-c g p") #'agentic/gpt-patch-apply)
+    (define-key m (kbd "C-c g P") #'agentic/gpt-patch-preview)
+    (define-key m (kbd "C-c g C") #'agentic/gpt-compose-patch)
+    (define-key m (kbd "C-c g W") #'agentic/gpt-compose-rewrite)
+    m)
+  "Keymap for `agentic-mode`.")
 
 (provide 'agentic)
+;;; ua-gpt5-dev.el ends here
 
-;;;###autoload
-(define-minor-mode agentic-mode ... )
-;;;###autoload
-(define-globalized-minor-mode global-agentic-mode agentic-mode (lambda () (agentic-mode 1)))
-
-
-
+(provide 'agentic)
 ;;; agentic.el ends here
