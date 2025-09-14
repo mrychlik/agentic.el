@@ -603,7 +603,4 @@ LIMIT is number of rows to show (default 20)."
   "Keymap for `agentic-mode`.")
 
 (provide 'agentic)
-;;; ua-gpt5-dev.el ends here
-
-(provide 'agentic)
 ;;; agentic.el ends here
