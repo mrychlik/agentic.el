@@ -163,6 +163,7 @@
   "Ask the model for a unified diff and auto-apply it to the repo.
 No preview buffer; uses git apply with safety checks."
   (interactive "sGPT patch request: ")
+  (agentic--ensure-gptel)
   (let* ((root (file-name-as-directory (agentic/project-root)))
          (sys (format
                (concat "Return ONE unified diff for repo root: %s\n"
