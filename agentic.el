@@ -314,7 +314,6 @@ interactive Magit calls)."
   "Open a PR for the current branch against the default branch using GitHub
 API via ghub."
   (interactive "sPR title: \nsPR body: ")
-  (agentic--ensure-magit)
   (agentic--ensure-forge)
   (agentic/forge-ensure-auth)
   (let* ((repo (forge-get-repository :tracked)))
