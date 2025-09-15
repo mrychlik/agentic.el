@@ -1,0 +1,26 @@
+name: elisp-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: purcell/setup-emacs@v7.0
+        with:
+          version: '29.4'
+      - name: Install dependencies
+        run: |
+          emacs -Q --batch \
+            --eval "(setq package-archives '((\"gnu\" . \"https://elpa.gnu.org/packages/\") (\"nongnu\" . \"https://elpa.nongnu.org/nongnu/\") (\"melpa\" . \"https://melpa.org/packages/\")))" \
+            -l package \
+            --eval "(package-initialize)" \
+            --eval "(unless package-archive-contents (package-refresh-contents))" \
+            --eval "(dolist (pkg '(package-lint compat transient with-editor yasnippet gptel magit forge cond-let llama)) (unless (package-installed-p pkg) (ignore-errors (package-install pkg))))"
+      - name: Byte-compile agentic.el
+        run: emacs -Q --batch -L . -f batch-byte-compile agentic.el
+      - name: package-lint agentic.el
+        run: emacs -Q --batch -l package-lint -f package-lint-batch-and-exit agentic.el || true

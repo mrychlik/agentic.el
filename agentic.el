@@ -28,11 +28,27 @@
 ;;; Code:
 
 (require 'package)
-(require 'ghub)   ;; for GitHub API calls (used by Forge)
-(require 'gptel)
+;;(require 'ghub)   ;; for GitHub API calls (used by Forge)
+(unless (require 'ghub nil t)
+  (user-error "Package 'ghub' is required for opening PRs (install ghub)."))
+
+;;(require 'gptel)
+;; Optional autoloads (not strictly required, but nice for byte-compile)
+(autoload 'gptel "gptel")
+;; (declare-function gptel-request "gptel") ;; add similar declares if you call internals
+
+(defun agentic--ensure-gptel ()
+  "Ensure gptel is available or signal a friendly error."
+  (unless (featurep 'gptel)
+    (unless (require 'gptel nil t)
+      (user-error "agentic.el: this command needs the 'gptel' package. Install gptel first."))))
+
+
 (require 'magit)
-(require 'forge)
-(require 'project "proj_GWvKyyGvSx7mq62LFbgyTFpl" t)   ;; optional but helpful
+;;(require 'forge)
+(autoload 'forge-get-repository "forge")
+(autoload 'forge-add-repository "forge")
+(require 'project)
 
 ;; Pick a model string your gptel supports right now.
 ;; If "gpt-5" isn’t recognized in your build, test with one of these and switch later:
@@ -91,6 +107,7 @@
 (defun agentic/gpt-rewrite (instruction)
   "Rewrite the active region (or whole buffer) per INSTRUCTION using GPT-5."
   (interactive "sRewrite instruction: ")
+  (agentic--ensure-gptel)
   (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
          (end (if (use-region-p) (region-end)       (point-max)))
          (original (buffer-substring-no-properties beg end))
@@ -146,6 +163,7 @@
   "Ask the model for a unified diff and auto-apply it to the repo.
 No preview buffer; uses git apply with safety checks."
   (interactive "sGPT patch request: ")
+  (agentic--ensure-gptel)
   (let* ((root (file-name-as-directory (agentic/project-root)))
          (sys (format
                (concat "Return ONE unified diff for repo root: %s\n"
@@ -309,7 +327,7 @@ API via ghub."
   "Probe MODELS (symbols) with a tiny request via current gptel-backend.
 Show results table in *gptel-probe* buffer (OK or API error)."
   (interactive)
-  (require 'gptel)
+  (agentic--ensure-gptel)
   (let* ((candidates (or models
                          '(gpt-4o-mini gpt-4o gpt-4.1 gpt-4.1-mini gpt-4 gpt-3.5-turbo)))
          (results '())
@@ -395,6 +413,7 @@ Show results table in *gptel-probe* buffer (OK or API error)."
 (defun agentic/gpt-compose-patch ()
   "Open a buffer to compose a PATCH prompt (yas + multi-line)."
   (interactive)
+  (agentic--ensure-gptel)
   (agentic/gpt--compose-pop
    "GPT PATCH — C-c C-c to submit"
    'patch
@@ -565,6 +584,7 @@ LIMIT is number of rows to show (default 20)."
 
 (defun agentic/gptel-use (m)
   (interactive)
+  (agentic--ensure-gptel)
   (setq gptel-model m)
   (message "gptel-model ⇒ %s" m))
 
