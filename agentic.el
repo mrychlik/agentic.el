@@ -262,6 +262,7 @@ No preview buffer; uses git apply with safety checks."
   "Create and switch to a safe, timestamped branch from PREFIX (no
 interactive Magit calls)."
   (interactive "sBranch prefix (e.g., ai/patch): ")
+  (agentic--ensure-magit)
   (let* ((ts (format-time-string "%Y%m%d-%H%M%S" (current-time) t))
          (base (or (magit-get-current-branch) "main"))
          (p (string-trim (or prefix "")))
@@ -276,6 +277,7 @@ interactive Magit calls)."
 (defun agentic/git-commit-all (msg)
   "Stage all changes and commit with MSG using plumbing."
   (interactive "sCommit message: ")
+  (agentic--ensure-magit)
   ;; Stage new/modified/deleted files
   (magit-call-git "add" "-A")
   ;; Commit
@@ -287,6 +289,7 @@ interactive Magit calls)."
 (defun agentic/git-push-current ()
   "Push current branch, setting upstream if needed (plumbing only)."
   (interactive)
+  (agentic--ensure-magit)
   (let* ((branch (magit-get-current-branch))
          (remote (or (magit-get "branch" branch "remote")
                      (magit-get "remote.pushDefault")
@@ -314,6 +317,7 @@ interactive Magit calls)."
   "Open a PR for the current branch against the default branch using GitHub
 API via ghub."
   (interactive "sPR title: \nsPR body: ")
+  (agentic--ensure-magit)
   (agentic/forge-ensure-auth)
   (let* ((repo (forge-get-repository :tracked)))
     (unless repo
