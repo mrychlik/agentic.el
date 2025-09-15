@@ -56,8 +56,6 @@
     (unless (require 'forge nil t)
       (user-error "agentic.el: this command needs the 'forge' package. Install forge first."))))
 
-;;(require 'magit)
-;;(require 'forge)
 (autoload 'forge-get-repository "forge")
 (autoload 'forge-add-repository "forge")
 (require 'project)
@@ -479,7 +477,6 @@ Show results table in *gptel-probe* buffer (OK or API error)."
       ('rewrite (agentic/gpt-rewrite prompt))       ;; call your rewrite function
       (_ (user-error "Unknown compose kind: %S" kind)))))
 
-(require 'magit)
 (require 'tabulated-list)
 
 ;; ---------- Top authors (commits) ----------
