@@ -245,7 +245,6 @@ No preview buffer; uses git apply with safety checks."
 ;;;###autoload
 (defun agentic/git--safe-branch-name (prefix)
   "Make a safe, timestamped branch name from PREFIX."
-  (agentic--ensure-magit)
   (let* ((ts (format-time-string "%Y%m%d-%H%M%S" (current-time) t))
          (base (or (magit-get-current-branch) "main"))
          (p (string-trim (or prefix "")))
