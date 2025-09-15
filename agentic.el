@@ -68,8 +68,6 @@
 
 
 ;; --- gptel backend + model (working settings) ---
-(require 'gptel)
-(setq gptel-log-level 'debug)
 
 (setq gptel-backend
       (gptel-make-openai "OpenAI"
