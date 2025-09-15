@@ -302,6 +302,7 @@ interactive Magit calls)."
 
 
 (defun agentic/forge-ensure-auth ()
+  (agentic--ensure-forge)
   (unless (file-exists-p (expand-file-name "~/.authinfo.gpg"))
     (user-error "No ~/.authinfo.gpg found. Create a GitHub token and store it there (see instructions)."))
   (let ((repo (forge-get-repository :tracked)))
