@@ -43,8 +43,20 @@
     (unless (require 'gptel nil t)
       (user-error "agentic.el: this command needs the 'gptel' package. Install gptel first."))))
 
+(defun agentic--ensure-magit ()
+  "Ensure Magit is available."
+  (unless (featurep 'magit)
+    (unless (require 'magit nil t)
+      (user-error "agentic.el: this command needs the 'magit' package. Install magit first."))))
 
-(require 'magit)
+(defun agentic--ensure-forge ()
+  "Ensure Forge (and Magit) are available."
+  (agentic--ensure-magit)
+  (unless (featurep 'forge)
+    (unless (require 'forge nil t)
+      (user-error "agentic.el: this command needs the 'forge' package. Install forge first."))))
+
+;;(require 'magit)
 ;;(require 'forge)
 (autoload 'forge-get-repository "forge")
 (autoload 'forge-add-repository "forge")
