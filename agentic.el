@@ -317,6 +317,7 @@ interactive Magit calls)."
 API via ghub."
   (interactive "sPR title: \nsPR body: ")
   (agentic--ensure-magit)
+  (agentic--ensure-forge)
   (agentic/forge-ensure-auth)
   (let* ((repo (forge-get-repository :tracked)))
     (unless repo
