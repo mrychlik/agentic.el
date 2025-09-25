@@ -40,7 +40,8 @@
   "Ensure gptel is available or signal a friendly error."
   (unless (featurep 'gptel)
     (unless (require 'gptel nil t)
-      (user-error "agentic.el: this command needs the 'gptel' package. Install gptel first."))))
+      (user-error "agentic.el: this command needs the 'gptel' package. Install gptel first.")))
+  (setq gptel-log-level 'debug))
 
 (autoload 'magit "magit")
 
