@@ -1,8 +1,8 @@
 ;;; agentic.el --- Agentic LLM workflows in Emacs -*- lexical-binding: t; -*-
 ;; Author: Marek Rychlik
 ;; Version: 0.2
-;; Keywords: tools, git, ai
 ;; Package-Requires: ((emacs "27.1") (gptel "0.9") (magit "3.3") (forge "0.4") (transient "0.5") (yasnippet "0.14"))
+;; Keywords: tools, git, ai
 ;; URL: https://github.com/mrychlik/agentic.el
 ;; License: MIT
 ;; SPDX-License-Identifier: MIT
