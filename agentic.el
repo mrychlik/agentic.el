@@ -590,11 +590,29 @@ if you are satisfied."
   "Total byte budget for all files combined (hard cap)."
   :type 'integer :group 'agentic-review)
 
-(defun agentic--text-file-p (path)
-  "Heuristic: treat PATH as text if no NUL byte in the first 4k."
-  (with-temp-buffer
-    (insert-file-contents-literally path nil 0 (min 4096 (nth 7 (file-attributes path))))
-    (not (save-excursion (goto-char (point-min)) (search-forward "\0" nil t)))))
+(defun agentic--list-project-files ()
+  "Return a list of tracked text files respecting .gitignore.
+Falls back to a recursive scan if Git is unavailable."
+  (let* ((root (agentic--project-root))
+         (default-directory root)
+         (candidates
+          (cond
+           ;; Use Git to respect .gitignore and include untracked (but not ignored)
+           ((executable-find "git")
+            (split-string
+             (with-output-to-string
+               (with-current-buffer standard-output
+                 (call-process "git" nil t nil "ls-files" "-co" "--exclude-standard")))
+             "\n" t))
+           ;; Fallback: naive recursive listing
+           (t (directory-files-recursively root ".*" nil
+                                           (lambda (f) (file-regular-p f)))))))
+    ;; Absolutize, keep only readable regular files first, then apply text heuristic
+    (let ((abs (mapcar (lambda (f) (expand-file-name f root)) candidates)))
+      (cl-remove-if-not #'agentic--text-file-p
+                        (cl-remove-if-not (lambda (p) (and (file-regular-p p)
+                                                           (file-readable-p p)))
+                                          abs)))))
 
 (defun agentic--read-file-safely (path cap)
   "Read PATH up to CAP bytes; return string (note truncation if any)."
