@@ -445,7 +445,7 @@ or `C-c C-k` to cancel."
                  (agentic--patch-system-prompt)
                  (agentic--project-root-or-error)
                  user-prompt)))
-    (gptel-prompt prompt))) ;; keep simple; users can swap streaming, etc.
+    (agentic--gptel-request-sync prompt))) ;; keep simple; users can swap streaming, etc.
 
 ;;;###autoload
 (defun agentic/gpt-patch-preview (prompt)
