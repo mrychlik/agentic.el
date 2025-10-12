@@ -67,9 +67,11 @@ Avoid destructive changes; prefer clear, minimal edits."
 ;;;; --- gptel integration (no gptel-prompt) ---
 
 (defun agentic--ensure-gptel ()
-  "Ensure the `gptel` package is available."
-  (unless (require 'gptel nil t)
-    (user-error "agentic: this command needs the `gptel` package (install it)")))
+  "Ensure the gptel request library is available."
+  ;; Prefer the request library (standalone); fall back to full UI if needed.
+  (unless (or (require 'gptel-request nil t)
+              (require 'gptel nil t))
+    (user-error "agentic: please install/enable the `gptel` package")))
 
 (defun agentic--gptel-request-sync (prompt)
   "Synchronously get a response for PROMPT using `gptel-request`."
