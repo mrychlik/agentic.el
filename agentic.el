@@ -590,6 +590,20 @@ if you are satisfied."
   "Total byte budget for all files combined (hard cap)."
   :type 'integer :group 'agentic-review)
 
+(defun agentic--text-file-p (path)
+  "Return non-nil if PATH looks like a readable text file.
+We attempt to read up to 4KiB literally and reject files containing NUL.
+Never signals; unreadable or problematic files return nil."
+  (and (stringp path)
+       (file-regular-p path)
+       (file-readable-p path)
+       (condition-case nil
+           (with-temp-buffer
+             (insert-file-contents-literally path nil 0 4096) ; avoid attrs entirely
+             (goto-char (point-min))
+             (not (search-forward "\0" nil t))) ; NUL indicates binary
+         (error nil))))
+
 (defun agentic--list-project-files ()
   "Return a list of tracked text files respecting .gitignore.
 Falls back to a recursive scan if Git is unavailable."
