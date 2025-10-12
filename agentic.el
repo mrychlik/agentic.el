@@ -249,27 +249,31 @@ Otherwise, block until a response arrives and return it as a string."
 (defun agentic--now () (float-time (current-time)))
 
 (defun agentic--log (header prompt response &optional info)
-  "Append a log entry with HEADER, PROMPT and RESPONSE to `agentic/log-buffer`.
-INFO may include a plist with :project, :command, :model, :status."
+  "Append a log entry with HEADER, PROMPT, RESPONSE to `agentic/log-buffer`.
+INFO may include :project :command :model :status. Never signals on nils."
   (when agentic/log-enabled
     (with-current-buffer (get-buffer-create agentic/log-buffer)
-      (let ((inhibit-read-only t))
+      (let ((inhibit-read-only t)
+            (cmd    (plist-get info :command))
+            (proj   (plist-get info :project))
+            (model  (plist-get info :model))
+            (status (plist-get info :status)))
         (unless (derived-mode-p 'outline-mode 'special-mode 'text-mode)
           (text-mode))
         (goto-char (point-max))
         (insert
-         (format "\n--- %s --- %s\n" header (format-time-string "%Y-%m-%d %H:%M:%S"))
-         (when-let ((cmd (plist-get info :command)))
-           (format "Command: %s\n" cmd))
-         (when-let ((proj (plist-get info :project)))
-           (format "Project: %s\n" proj))
-         (when-let ((model (plist-get info :model)))
-           (format "Model: %s\n" model))
-         (when-let ((status (plist-get info :status)))
-           (format "Status: %s\n" status))
+         (format "\n--- %s --- %s\n" (or header "[no header]")
+                 (format-time-string "%Y-%m-%d %H:%M:%S"))
+         (if (stringp cmd)   (format "Command: %s\n" cmd)   "")
+         (if (stringp proj)  (format "Project: %s\n" proj)  "")
+         (if (stringp model) (format "Model: %s\n" model)   "")
+         (if (stringp status)(format "Status: %s\n" status) "")
          "\n# Prompt\n"
-         (or prompt "[no prompt]") "\n\n# Response\n"
-         (or response "[no response]") "\n")))))
+         (or prompt "[no prompt]")
+         "\n\n# Response\n"
+         (or response "[no response]")
+         "\n")))))
+
 
 (defun agentic--plist-remove (plist key)
   "Return a new PLIST with KEY removed (single occurrence)."
