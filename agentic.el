@@ -591,17 +591,17 @@ if you are satisfied."
   :type 'integer :group 'agentic-review)
 
 (defun agentic--text-file-p (path)
-  "Return non-nil if PATH looks like a readable text file.
-We attempt to read up to 4KiB literally and reject files containing NUL.
-Never signals; unreadable or problematic files return nil."
+  "Return non-nil if PATH is a readable text file.
+We read up to 4KiB literally and treat any NUL byte as binary.
+Never signals; unreadable/problem files return nil."
   (and (stringp path)
        (file-regular-p path)
        (file-readable-p path)
        (condition-case nil
            (with-temp-buffer
-             (insert-file-contents-literally path nil 0 4096) ; avoid attrs entirely
+             (insert-file-contents-literally path nil 0 4096)
              (goto-char (point-min))
-             (not (search-forward "\0" nil t))) ; NUL indicates binary
+             (not (search-forward "\0" nil t)))
          (error nil))))
 
 (defun agentic--list-project-files ()
@@ -629,16 +629,14 @@ Falls back to a recursive scan if Git is unavailable."
 			 abs)))))
 
 (defun agentic--read-file-safely (path cap)
-  "Read PATH up to CAP bytes; return string (note truncation if any)."
-  (let* ((size (nth 7 (file-attributes path)))
-         (n (min cap (or size cap)))
-         (s ""))
-    (with-temp-buffer
-      (insert-file-contents path nil 0 n)
-      (setq s (buffer-substring-no-properties (point-min) (point-max))))
-    (if (and size (> size cap))
-        (concat s "\n\n[...TRUNCATED... " (number-to-string (- size cap)) " bytes not shown]")
-      s)))
+  "Read PATH up to CAP bytes and return a string.
+Never returns nil; unreadable files yield \"\"."
+  (condition-case nil
+      (with-temp-buffer
+        (insert-file-contents path nil 0 cap) ; don’t rely on file-attributes
+        (buffer-substring-no-properties (point-min) (point-max)))
+    (error "")))
+
 
 (defun agentic--project-root ()
   (or (when-let ((pr (project-current t))) (project-root pr))
