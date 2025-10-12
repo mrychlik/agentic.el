@@ -33,11 +33,13 @@
   :prefix "agentic/")
 
 (defcustom agentic/echo-progress t
-  "If non-nil, show echo-area progress messages during GPT calls."
+  "If non-nil, show echo-area progress messages during GPT calls (e.g.,
+“contacting model…” and completion with elapsed seconds)."
   :type 'boolean :group 'agentic)
 
 (defcustom agentic/log-enabled t
-  "If non-nil, append GPT prompts and responses to `agentic/log-buffer`."
+  "If non-nil, append GPT prompts and responses to `agentic/log-buffer`.
+The log is plain text; enable it to keep a lightweight transcript."
   :type 'boolean :group 'agentic)
 
 (defcustom agentic/log-buffer "*Agentic Log*"
@@ -386,6 +388,7 @@ INFO may include :project :command :model :status. Never signals on nils."
     (define-key m (kbd "C-c g C") #'agentic/gpt-compose-patch)
     (define-key m (kbd "C-c g W") #'agentic/gpt-compose-rewrite)
     (define-key m (kbd "C-c g v") #'agentic/review-project)
+    (define-key m (kbd "C-c g l") #'agentic/open-log)    
     m)
   "Keymap for `agentic-mode`.")
 
@@ -572,6 +575,13 @@ if you are satisfied."
   (let ((branch (magit-get-current-branch)))
     (agentic--call-process "git" "push" "--set-upstream" "origin" branch)
     (message "agentic: pushed %s to origin." branch)))
+
+;;;###autoload
+(defun agentic/open-log ()
+  "Open the Agentic interaction log buffer (`agentic/log-buffer`)."
+  (interactive)
+  (pop-to-buffer (get-buffer-create agentic/log-buffer)))
+
 
 ;; -------------------------------------------------------------------
 ;; Project review (read many files and request feedback)
