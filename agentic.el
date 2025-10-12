@@ -280,8 +280,10 @@ INFO may include a plist with :project, :command, :model, :status."
   (with-eval-after-load 'gptel
     (when (advice-member-p #'agentic--advice-gptel-request 'gptel-request)
       (advice-remove 'gptel-request #'agentic--advice-gptel-request))
-    (when (advice-member-p #'agentic--advice-gptel-prompt 'gptel-prompt)
+    (when (and (fboundp 'gptel-prompt)
+               (advice-member-p #'agentic--advice-gptel-prompt 'gptel-prompt))
       (advice-remove 'gptel-prompt  #'agentic--advice-gptel-prompt))))
+
 
 (cl-defun agentic--advice-gptel-request (orig prompt &rest keys &key callback &allow-other-keys)
   "Around advice for `gptel-request` that logs and shows progress."
