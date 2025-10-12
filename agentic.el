@@ -74,6 +74,24 @@ Avoid destructive changes; prefer clear, minimal edits."
     (user-error "agentic: please install/enable the `gptel` package")))
 
 (defun agentic--gptel-request-sync (prompt)
+  "Return a RESPONSE string for PROMPT using `gptel-request`.
+Always returns a string (\"\" if the model produced none)."
+  (agentic--ensure-gptel)
+  (unless (fboundp 'gptel-request)
+    (user-error "agentic: your gptel build lacks `gptel-request`"))
+  (let ((result :pending))
+    (gptel-request
+     prompt
+     :callback (lambda (resp _info)
+                 ;; Some routings return nil; normalize to empty string.
+                 (setq result (if (stringp resp) resp ""))))
+    ;; Wait without busy-spinning.
+    (while (eq result :pending)
+      (accept-process-output nil 0.05))
+    result))
+
+
+(defun agentic--gptel-request-sync (prompt)
   "Synchronously get a response for PROMPT using `gptel-request`."
   (agentic--ensure-gptel)
   (let ((result nil) (done nil))
