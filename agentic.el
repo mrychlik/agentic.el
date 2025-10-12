@@ -381,6 +381,7 @@ INFO may include a plist with :project, :command, :model, :status."
     (define-key m (kbd "C-c g R") #'agentic/forge-open-pr)
     (define-key m (kbd "C-c g C") #'agentic/gpt-compose-patch)
     (define-key m (kbd "C-c g W") #'agentic/gpt-compose-rewrite)
+    (define-key m (kbd "C-c g v") #'agentic/review-project)
     m)
   "Keymap for `agentic-mode`.")
 
@@ -567,6 +568,125 @@ if you are satisfied."
   (let ((branch (magit-get-current-branch)))
     (agentic--call-process "git" "push" "--set-upstream" "origin" branch)
     (message "agentic: pushed %s to origin." branch)))
+
+;; -------------------------------------------------------------------
+;; Project review (read many files and request feedback)
+;; -------------------------------------------------------------------
+
+(defgroup agentic-review nil
+  "Project review settings for agentic."
+  :group 'agentic
+  :prefix "agentic/review-")
+
+(defcustom agentic/review-max-files 40
+  "Maximum number of files to include in a single review."
+  :type 'integer :group 'agentic-review)
+
+(defcustom agentic/review-max-bytes-per-file 20000
+  "Max bytes to read per file (truncate beyond this)."
+  :type 'integer :group 'agentic-review)
+
+(defcustom agentic/review-total-byte-budget 300000
+  "Total byte budget for all files combined (hard cap)."
+  :type 'integer :group 'agentic-review)
+
+(defun agentic--text-file-p (path)
+  "Heuristic: treat PATH as text if no NUL byte in the first 4k."
+  (with-temp-buffer
+    (insert-file-contents-literally path nil 0 (min 4096 (nth 7 (file-attributes path))))
+    (not (save-excursion (goto-char (point-min)) (search-forward "\0" nil t)))))
+
+(defun agentic--read-file-safely (path cap)
+  "Read PATH up to CAP bytes; return string (note truncation if any)."
+  (let* ((size (nth 7 (file-attributes path)))
+         (n (min cap (or size cap)))
+         (s ""))
+    (with-temp-buffer
+      (insert-file-contents path nil 0 n)
+      (setq s (buffer-substring-no-properties (point-min) (point-max))))
+    (if (and size (> size cap))
+        (concat s "\n\n[...TRUNCATED... " (number-to-string (- size cap)) " bytes not shown]")
+      s)))
+
+(defun agentic--project-root ()
+  (or (when-let ((pr (project-current t))) (project-root pr))
+      (user-error "agentic: not in a project")))
+
+(defun agentic--list-project-files ()
+  "Return a list of tracked text files respecting .gitignore; fall back to recursive scan."
+  (let* ((root (agentic--project-root))
+         (default-directory root)
+         (files
+          (cond
+           ((executable-find "git")
+            ;; -c (cached tracked), -o (others), --exclude-standard respects .gitignore
+            ;; Filter with git's text heuristic: we’ll recheck locally.
+            (split-string
+             (with-output-to-string
+               (with-current-buffer standard-output
+                 (call-process "git" nil t nil "ls-files" "-co" "--exclude-standard")))
+             "\n" t))
+           (t
+            (directory-files-recursively root ".*" nil
+                                         (lambda (f) (file-regular-p f)))))))
+    ;; Absolute paths, text-only
+    (cl-remove-if-not
+     #'agentic--text-file-p
+     (mapcar (lambda (f) (expand-file-name f root)) files))))
+
+(defun agentic--build-review-prompt (root files)
+  "Build a structured prompt from FILES in ROOT under size budgets."
+  (let* ((remaining agentic/review-total-byte-budget)
+         (chunks '()))
+    (dolist (f files)
+      (when (> remaining 0)
+        (let* ((cap (min agentic/review-max-bytes-per-file remaining))
+               (content (agentic--read-file-safely f cap))
+               (used (length content)))
+          (when (> used 0)
+            (push (format "<<<FILE %s>>>\n%s\n<<<END FILE>>>\n" (file-relative-name f root) content)
+                  chunks)
+            (setq remaining (max 0 (- remaining used)))))))
+    (format
+     (concat
+      "You are reviewing a small software project. For each file, provide:\n"
+      "1) brief summary of what it does\n"
+      "2) correctness/safety concerns\n"
+      "3) style/readability issues\n"
+      "4) concrete improvements (bullets)\n"
+      "Then give a short overall summary and, if warranted, a unified diff at the end.\n\n"
+      "Project root: %s\n\n"
+      "%s\n"
+      "If you include a diff, return ONE unified diff rooted at the project root.\n")
+     root
+     (mapconcat #'identity (nreverse chunks) "\n"))))
+
+;;;###autoload
+(defun agentic/review-project ()
+  "Read many text files in the current project and ask GPT for a review."
+  (interactive)
+  (agentic--ensure-gptel)
+  (let* ((root (agentic--project-root))
+         (all (agentic--list-project-files))
+         (files (cl-subseq all 0 (min (length all) agentic/review-max-files)))
+         (prompt (agentic--build-review-prompt root files)))
+    (message "agentic: collecting %d files (budget ~%dkB) …"
+             (length files) (/ agentic/review-total-byte-budget 1000))
+    ;; Synchronous call keeps UX simple; switch to async if you prefer.
+    (let ((response (agentic--gptel-request-sync prompt)))
+      (with-current-buffer (get-buffer-create "*Agentic Review*")
+        (erase-buffer)
+        (insert response)
+        (goto-char (point-min))
+        (view-mode 1)
+        (pop-to-buffer (current-buffer))))
+    (when (fboundp 'agentic--log)
+      (agentic--log "PROJECT REVIEW"
+                    (format "Reviewed %d files." (length files))
+                    "[see *Agentic Review*]"
+                    (list :project root :command "agentic/review-project" :status "ok")))))
+
+
 
 ;; -------------------------------------------------------------------
 ;; Forge: open PR
