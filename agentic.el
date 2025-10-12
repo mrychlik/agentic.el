@@ -38,7 +38,8 @@
   :type 'boolean :group 'agentic)
 
 (defcustom agentic/log-enabled t
-  "If non-nil, append GPT prompts and responses to `agentic/log-buffer`."
+"If non-nil, append GPT prompts and responses to `agentic/log-buffer`.
+The log is plain text; enable it to keep a lightweight transcript."
   :type 'boolean :group 'agentic)
 
 (defcustom agentic/log-buffer "*Agentic Log*"
