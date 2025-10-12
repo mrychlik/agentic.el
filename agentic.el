@@ -103,42 +103,41 @@ Always returns a string (\"\" if the model produced none)."
 
 ;;;###autoload
 (defun agentic/gpt-rewrite (instruction)
-  "Rewrite region or buffer using INSTRUCTION via GPT (gptel-request)."
+  "Rewrite region or buffer using INSTRUCTION via gptel-request."
   (interactive "sRewrite instruction: ")
   (agentic--ensure-gptel)
   (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
          (end (if (use-region-p) (region-end)       (point-max)))
-         ;; use markers so edits before the callback don't break insertion
+         ;; Markers survive user edits while the model is thinking:
          (mbeg (copy-marker beg))
-         (mend (copy-marker end t))  ;; right-inserting marker
+         (mend (copy-marker end t))         ; right-inserting
          (original (buffer-substring-no-properties beg end))
-         (root (when (fboundp 'agentic--project-root) (ignore-errors (agentic--project-root))))
+         (root (when (fboundp 'agentic--project-root)
+                 (ignore-errors (agentic--project-root))))
          (prompt (format "Rewrite the following content per instruction.\nInstruction:\n%s\n\nContent:\n%s"
                          instruction original))
          (here (current-buffer)))
     (message "agentic: contacting model…")
-    (gptel-request
-     prompt
-     :callback
-     (lambda (response info)
-       (when (buffer-live-p here)
-         (with-current-buffer here
-           (if (and response (not (string-empty-p response)))
-               (progn
-                 (save-excursion
-                   (delete-region (marker-position mbeg) (marker-position mend))
-                   (goto-char (marker-position mbeg))
-                   (insert response))
-                 (message "agentic: rewrite applied."))
-             (user-error "agentic: empty response")))
-         ;; free markers
-         (set-marker mbeg nil) (set-marker mend nil))
-       (when (fboundp 'agentic--log)
-         (agentic--log "REWRITE" prompt response
-                       (list :project root
-                             :command "agentic/gpt-rewrite"
-                             :model   (plist-get info :model)
-                             :status  "ok")))))))
+    (let ((response (agentic--gptel-request-sync prompt)))
+      (when (buffer-live-p here)
+        (with-current-buffer here
+          (if (and (stringp response)
+                   (not (string-empty-p response)))
+              (progn
+                (save-excursion
+                  (delete-region (marker-position mbeg) (marker-position mend))
+                  (goto-char (marker-position mbeg))
+                  (insert response))
+                (message "agentic: rewrite applied."))
+            (message "agentic: empty response (check routing: C-u C-c RET in gptel to ensure output is not redirected)."))))
+      ;; free markers
+      (set-marker mbeg nil) (set-marker mend nil)
+      ;; log if available
+      (when (fboundp 'agentic--log)
+        (agentic--log "REWRITE" prompt response
+                      (list :project root
+                            :command "agentic/gpt-rewrite"
+                            :status (if (string-empty-p response) "empty" "ok")))))))
 
 ;;;###autoload
 (defun agentic/gpt-patch-preview (prompt)
