@@ -184,26 +184,23 @@ Avoid destructive changes; prefer clear, minimal edits."
 
 (defun agentic--gptel-call (prompt &optional callback)
   "Call gptel with PROMPT.
-If CALLBACK is non-nil and `gptel-request` exists, use it asynchronously,
-calling CALLBACK as (RESPONSE INFO). Otherwise fall back to synchronous
-`gptel-prompt` and return the response string."
+If CALLBACK is non-nil, call `gptel-request` asynchronously and return :async.
+Otherwise, block until a response arrives and return it as a string."
   (agentic--ensure-gptel)
-  (cond
-   ;; Prefer async if available and a callback is provided
-   ((and (fboundp 'gptel-request) callback)
-    (gptel-request prompt :callback callback)
-    :async)
-   ;; Synchronous prompt (older or simpler gptel)
-   ((fboundp 'gptel-prompt)
-    (gptel-prompt prompt))
-   ;; Last resort: emulate sync via request
-   ((fboundp 'gptel-request)
-    (let ((result nil) (done nil))
-      (gptel-request prompt :callback (lambda (resp info)
-                                        (setq result resp done t)))
-      (while (not done) (sleep-for 0.05))
-      result))
-   (t (user-error "agentic: gptel is loaded, but has neither gptel-prompt nor gptel-request"))))
+  (unless (fboundp 'gptel-request)
+    (user-error "agentic: your gptel build provides `gptel-request` only; please update if missing."))
+  (if callback
+      (progn
+        (gptel-request prompt :callback callback)
+        :async)
+    ;; Synchronous wrapper on top of the async API
+    (let ((result nil) (done nil)))
+      (gptel-request prompt
+                     :callback (lambda (resp _info)
+                                 (setq result resp done t)))
+      ;; be a good citizen; don't busy spin
+      (while (not done) (accept-process-output nil 0.05))
+      result)))
 
 (defun agentic--ensure-magit ()
   "Ensure the `magit` package is available or signal a friendly error."
@@ -269,10 +266,13 @@ INFO may include a plist with :project, :command, :model, :status."
   "Enable agentic progress and logging around gptel calls."
   (interactive)
   (with-eval-after-load 'gptel
+    ;; Always advise the supported async API:
     (unless (advice-member-p #'agentic--advice-gptel-request 'gptel-request)
       (advice-add 'gptel-request :around #'agentic--advice-gptel-request))
-    (unless (advice-member-p #'agentic--advice-gptel-prompt 'gptel-prompt)
-      (advice-add 'gptel-prompt  :around #'agentic--advice-gptel-prompt))))
+    ;; Only advise `gptel-prompt` if that function exists in the user's gptel:
+    (when (fboundp 'gptel-prompt)
+      (unless (advice-member-p #'agentic--advice-gptel-prompt 'gptel-prompt)
+        (advice-add 'gptel-prompt  :around #'agentic--advice-gptel-prompt)))))
 
 (defun agentic--disable-gptel-logging ()
   "Disable agentic progress and logging around gptel calls."
