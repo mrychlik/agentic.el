@@ -88,6 +88,9 @@ Avoid destructive changes; prefer clear, minimal edits."
   (agentic--ensure-gptel)
   (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
          (end (if (use-region-p) (region-end)       (point-max)))
+         ;; use markers so edits before the callback don't break insertion
+         (mbeg (copy-marker beg))
+         (mend (copy-marker end t))  ;; right-inserting marker
          (original (buffer-substring-no-properties beg end))
          (root (when (fboundp 'agentic--project-root) (ignore-errors (agentic--project-root))))
          (prompt (format "Rewrite the following content per instruction.\nInstruction:\n%s\n\nContent:\n%s"
@@ -98,15 +101,18 @@ Avoid destructive changes; prefer clear, minimal edits."
      prompt
      :callback
      (lambda (response info)
-       (with-current-buffer here
-         (if (and response (not (string-empty-p response)))
-             (progn
-               (save-excursion
-                 (delete-region beg end)
-                 (goto-char beg)
-                 (insert response))
-               (message "agentic: rewrite applied."))
-           (user-error "agentic: empty response")))
+       (when (buffer-live-p here)
+         (with-current-buffer here
+           (if (and response (not (string-empty-p response)))
+               (progn
+                 (save-excursion
+                   (delete-region (marker-position mbeg) (marker-position mend))
+                   (goto-char (marker-position mbeg))
+                   (insert response))
+                 (message "agentic: rewrite applied."))
+             (user-error "agentic: empty response")))
+         ;; free markers
+         (set-marker mbeg nil) (set-marker mend nil))
        (when (fboundp 'agentic--log)
          (agentic--log "REWRITE" prompt response
                        (list :project root
