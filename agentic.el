@@ -206,7 +206,7 @@ Otherwise, block until a response arrives and return it as a string."
                                  (setq result resp done t)))
       ;; be a good citizen; don't busy spin
       (while (not done) (accept-process-output nil 0.05))
-      result)))
+      result))
 
 (defun agentic--ensure-magit ()
   "Ensure the `magit` package is available or signal a friendly error."
