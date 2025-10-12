@@ -32,6 +32,22 @@
   :group 'tools
   :prefix "agentic/")
 
+(defcustom agentic/echo-progress t
+  "If non-nil, show echo-area progress messages during GPT calls."
+  :type 'boolean :group 'agentic)
+
+(defcustom agentic/log-enabled t
+  "If non-nil, append GPT prompts and responses to `agentic/log-buffer`."
+  :type 'boolean :group 'agentic)
+
+(defcustom agentic/log-buffer "*Agentic Log*"
+  "Buffer name where agentic logs GPT prompts/responses."
+  :type 'string :group 'agentic)
+
+(defcustom agentic/auto-enable-gptel-logging t
+  "If non-nil, enable agentic's gptel progress+logging advices after gptel loads."
+  :type 'boolean :group 'agentic)
+
 (defcustom agentic/system-prompt
   "You are a careful software engineer. When asked for a patch,
 return a *single unified diff* rooted at the project root,
@@ -48,11 +64,168 @@ Avoid destructive changes; prefer clear, minimal edits."
 ;; Lazy-loading helpers
 ;; -------------------------------------------------------------------
 
+;;;; --- gptel integration (no gptel-prompt) ---
+
 (defun agentic--ensure-gptel ()
-  "Ensure the `gptel` package is available or signal a friendly error."
-  (unless (featurep 'gptel)
-    (unless (require 'gptel nil t)
-      (user-error "agentic.el: this command needs the `gptel` package (install it)"))))
+  "Ensure the gptel request library is available."
+  ;; Prefer the request library (standalone); fall back to full UI if needed.
+  (unless (or (require 'gptel-request nil t)
+              (require 'gptel nil t))
+    (user-error "agentic: please install/enable the `gptel` package")))
+
+(defun agentic--gptel-request-sync (prompt)
+  "Return a RESPONSE string for PROMPT using `gptel-request`.
+Always returns a string (\"\" if the model produced none)."
+  (agentic--ensure-gptel)
+  (unless (fboundp 'gptel-request)
+    (user-error "agentic: your gptel build lacks `gptel-request`"))
+  (let ((result :pending))
+    (gptel-request
+     prompt
+     :callback (lambda (resp _info)
+                 ;; Some routings return nil; normalize to empty string.
+                 (setq result (if (stringp resp) resp ""))))
+    ;; Wait without busy-spinning.
+    (while (eq result :pending)
+      (accept-process-output nil 0.05))
+    result))
+
+
+(defun agentic--gptel-request-sync (prompt)
+  "Synchronously get a response for PROMPT using `gptel-request`."
+  (agentic--ensure-gptel)
+  (let ((result nil) (done nil))
+    (gptel-request prompt
+                   :callback (lambda (resp _info)
+                               (setq result resp done t)))
+    (while (not done) (sleep-for 0.05))
+    result))
+
+;;;###autoload
+(defun agentic/gpt-rewrite (instruction)
+  "Rewrite region or buffer using INSTRUCTION via gptel-request."
+  (interactive "sRewrite instruction: ")
+  (agentic--ensure-gptel)
+  (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
+         (end (if (use-region-p) (region-end)       (point-max)))
+         ;; Markers survive user edits while the model is thinking:
+         (mbeg (copy-marker beg))
+         (mend (copy-marker end t))         ; right-inserting
+         (original (buffer-substring-no-properties beg end))
+         (root (when (fboundp 'agentic--project-root)
+                 (ignore-errors (agentic--project-root))))
+         (prompt (format "Rewrite the following content per instruction.\nInstruction:\n%s\n\nContent:\n%s"
+                         instruction original))
+         (here (current-buffer)))
+    (message "agentic: contacting model…")
+    (let ((response (agentic--gptel-request-sync prompt)))
+      (when (buffer-live-p here)
+        (with-current-buffer here
+          (if (and (stringp response)
+                   (not (string-empty-p response)))
+              (progn
+                (save-excursion
+                  (delete-region (marker-position mbeg) (marker-position mend))
+                  (goto-char (marker-position mbeg))
+                  (insert response))
+                (message "agentic: rewrite applied."))
+            (message "agentic: empty response (check routing: C-u C-c RET in gptel to ensure output is not redirected)."))))
+      ;; free markers
+      (set-marker mbeg nil) (set-marker mend nil)
+      ;; log if available
+      (when (fboundp 'agentic--log)
+        (agentic--log "REWRITE" prompt response
+                      (list :project root
+                            :command "agentic/gpt-rewrite"
+                            :status (if (string-empty-p response) "empty" "ok")))))))
+
+;;;###autoload
+(defun agentic/gpt-patch-preview (prompt)
+  "Ask GPT for a unified diff for the current project and show it."
+  (interactive "sPatch prompt: ")
+  (agentic--ensure-gptel)
+  (let* ((root (if (fboundp 'agentic--project-root) (agentic--project-root) default-directory))
+         (full (format "You are an expert code editor. %s\n\nProject root: %s\n\nUser request:\n%s"
+                       (if (boundp 'agentic/system-prompt) agentic/system-prompt
+                         "Return a single unified diff; no prose, no fences.")
+                       root prompt)))
+    (message "agentic: contacting model…")
+    (gptel-request
+     full
+     :callback
+     (lambda (response info)
+       (unless (and response (not (string-empty-p response)))
+         (user-error "agentic: empty response"))
+       (with-current-buffer (get-buffer-create "*Agentic Diff*")
+         (erase-buffer)
+         (insert response)
+         (diff-mode)
+         (goto-char (point-min))
+         (pop-to-buffer (current-buffer)))
+       (message "agentic: preview ready.")
+       (when (fboundp 'agentic--log)
+         (agentic--log "PATCH PREVIEW" prompt response
+                       (list :project root
+                             :command "agentic/gpt-patch-preview"
+                             :model   (plist-get info :model)
+                             :status  "ok")))))))
+
+;;;###autoload
+(defun agentic/gpt-patch-apply (prompt)
+  "Ask GPT for a unified diff and apply it with `git apply`."
+  (interactive "sPatch prompt: ")
+  (agentic--ensure-gptel)
+  (let* ((root (if (fboundp 'agentic--project-root) (agentic--project-root) default-directory))
+         (default-directory root)
+         (full (format "You are an expert code editor. %s\n\nProject root: %s\n\nUser request:\n%s"
+                       (if (boundp 'agentic/system-prompt) agentic/system-prompt
+                         "Return a single unified diff; no prose, no fences.")
+                       root prompt)))
+    (message "agentic: contacting model…")
+    (gptel-request
+     full
+     :callback
+     (lambda (response info)
+       (unless (and response (not (string-empty-p response)))
+         (user-error "agentic: empty response"))
+       (let ((tmp (make-temp-file "agentic-diff-" nil ".patch")))
+         (unwind-protect
+             (progn
+               (with-temp-file tmp (insert response))
+               (condition-case err
+                   (progn
+                     (call-process "git" nil nil nil "apply" "--reject" "--whitespace=nowarn" tmp)
+                     (message "agentic: patch applied."))
+                 (error
+                  (message "%s" (cadr err))
+                  (user-error "agentic: patch failed; check *.rej via Magit"))))
+           (ignore-errors (delete-file tmp))))
+       (when (fboundp 'agentic--log)
+         (agentic--log "PATCH APPLY" prompt response
+                       (list :project root
+                             :command "agentic/gpt-patch-apply"
+                             :model   (plist-get info :model)
+                             :status  "applied")))))))
+
+(defun agentic--gptel-call (prompt &optional callback)
+  "Call gptel with PROMPT.
+If CALLBACK is non-nil, call `gptel-request` asynchronously and return :async.
+Otherwise, block until a response arrives and return it as a string."
+  (agentic--ensure-gptel)
+  (unless (fboundp 'gptel-request)
+    (user-error "agentic: your gptel build provides `gptel-request` only; please update if missing."))
+  (if callback
+      (progn
+        (gptel-request prompt :callback callback)
+        :async)
+    ;; Synchronous wrapper on top of the async API
+    (let ((result nil) (done nil)))
+      (gptel-request prompt
+                     :callback (lambda (resp _info)
+                                 (setq result resp done t)))
+      ;; be a good citizen; don't busy spin
+      (while (not done) (accept-process-output nil 0.05))
+      result))
 
 (defun agentic--ensure-magit ()
   "Ensure the `magit` package is available or signal a friendly error."
@@ -70,6 +243,109 @@ Avoid destructive changes; prefer clear, minimal edits."
 ;; Optional autoload stubs so byte-compile is quiet when forge isn't present.
 (autoload 'forge-get-repository "forge")
 (autoload 'forge-add-repository "forge")
+
+;; ---------- Helpers ----------
+
+(defun agentic--now () (float-time (current-time)))
+
+(defun agentic--log (header prompt response &optional info)
+  "Append a log entry with HEADER, PROMPT and RESPONSE to `agentic/log-buffer`.
+INFO may include a plist with :project, :command, :model, :status."
+  (when agentic/log-enabled
+    (with-current-buffer (get-buffer-create agentic/log-buffer)
+      (let ((inhibit-read-only t))
+        (unless (derived-mode-p 'outline-mode 'special-mode 'text-mode)
+          (text-mode))
+        (goto-char (point-max))
+        (insert
+         (format "\n--- %s --- %s\n" header (format-time-string "%Y-%m-%d %H:%M:%S"))
+         (when-let ((cmd (plist-get info :command)))
+           (format "Command: %s\n" cmd))
+         (when-let ((proj (plist-get info :project)))
+           (format "Project: %s\n" proj))
+         (when-let ((model (plist-get info :model)))
+           (format "Model: %s\n" model))
+         (when-let ((status (plist-get info :status)))
+           (format "Status: %s\n" status))
+         "\n# Prompt\n"
+         (or prompt "[no prompt]") "\n\n# Response\n"
+         (or response "[no response]") "\n")))))
+
+(defun agentic--plist-remove (plist key)
+  "Return a new PLIST with KEY removed (single occurrence)."
+  (let (out drop)
+    (while plist
+      (let ((k (pop plist)) (v (pop plist)))
+        (if (and (not drop) (eq k key))
+            (setq drop t)
+          (setq out (cons v (cons k out))))))
+    (nreverse out)))
+
+;; ---------- Advices for gptel ----------
+;; Wrap `gptel-request` (async) and `gptel-prompt` (sync) to:
+;;  - show progress messages with elapsed time
+;;  - append a small transcript to *Agentic Log*
+;; Enabled automatically once gptel is loaded.
+
+(defun agentic--enable-gptel-logging ()
+  "Enable agentic progress and logging around gptel calls."
+  (interactive)
+  (with-eval-after-load 'gptel
+    ;; Always advise the supported async API:
+    (unless (advice-member-p #'agentic--advice-gptel-request 'gptel-request)
+      (advice-add 'gptel-request :around #'agentic--advice-gptel-request))
+    ;; Only advise `gptel-prompt` if that function exists in the user's gptel:
+    (when (fboundp 'gptel-prompt)
+      (unless (advice-member-p #'agentic--advice-gptel-prompt 'gptel-prompt)
+        (advice-add 'gptel-prompt  :around #'agentic--advice-gptel-prompt)))))
+
+(defun agentic--disable-gptel-logging ()
+  "Disable agentic progress and logging around gptel calls."
+  (interactive)
+  (with-eval-after-load 'gptel
+    (when (advice-member-p #'agentic--advice-gptel-request 'gptel-request)
+      (advice-remove 'gptel-request #'agentic--advice-gptel-request))
+    (when (and (fboundp 'gptel-prompt)
+               (advice-member-p #'agentic--advice-gptel-prompt 'gptel-prompt))
+      (advice-remove 'gptel-prompt  #'agentic--advice-gptel-prompt))))
+
+
+(cl-defun agentic--advice-gptel-request (orig prompt &rest keys &key callback &allow-other-keys)
+  "Around advice for `gptel-request` that logs and shows progress."
+  (let* ((t0 (agentic--now))
+         (cb callback)
+         (keys2 (agentic--plist-remove keys :callback)))
+    (when agentic/echo-progress
+      (message "agentic: contacting model…"))
+    (apply orig prompt
+           :callback
+           (lambda (response info)
+             (when agentic/echo-progress
+               (message "agentic: model done (%.1fs)" (- (agentic--now) t0)))
+             (agentic--log "GPTEL REQUEST"
+                           prompt response
+                           (list :command "gptel-request"
+                                 :model   (plist-get info :model)
+                                 :status  "ok"))
+             (when cb (funcall cb response info)))
+           keys2)))
+
+(defun agentic--advice-gptel-prompt (orig prompt &rest args)
+  "Around advice for `gptel-prompt` that logs and shows progress."
+  (let ((t0 (agentic--now)))
+    (when agentic/echo-progress
+      (message "agentic: contacting model…"))
+    (let ((resp (apply orig prompt args)))
+      (when agentic/echo-progress
+        (message "agentic: model done (%.1fs)" (- (agentic--now) t0)))
+      (agentic--log "GPTEL PROMPT" prompt resp
+                    (list :command "gptel-prompt" :status "ok"))
+      resp)))
+
+;; Enable automatically once gptel loads (no hard require at load time).
+(when agentic/auto-enable-gptel-logging
+  (ignore-errors (agentic--enable-gptel-logging)))
+
 
 ;; -------------------------------------------------------------------
 ;; Utilities
@@ -145,7 +421,7 @@ entire buffer is rewritten *in place*. You can always undo if needed."
          (original (buffer-substring-no-properties beg end))
          (prompt (format "Rewrite the following content per instruction.\nInstruction:\n%s\n\nContent:\n%s"
                          instruction original))
-         (response (gptel-prompt prompt))) ;; simple synchronous call
+         (response (agentic--gptel-request-sync prompt))) ;; simple synchronous call
     (when (and response (not (string-empty-p response)))
       (save-excursion
         (delete-region beg end)
@@ -196,7 +472,7 @@ or `C-c C-k` to cancel."
                  (agentic--patch-system-prompt)
                  (agentic--project-root-or-error)
                  user-prompt)))
-    (gptel-prompt prompt))) ;; keep simple; users can swap streaming, etc.
+    (agentic--gptel-request-sync prompt))) ;; keep simple; users can swap streaming, etc.
 
 ;;;###autoload
 (defun agentic/gpt-patch-preview (prompt)
