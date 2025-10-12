@@ -12,6 +12,7 @@
 - `C-c g P` — **Patch (preview)**: show the diff, don’t apply.
 - `C-c g b` — **Safe branch**, `C-c g c` **Commit**, `C-c g u` **Push**, `C-c g R` **Open PR** (Forge).
 - `C-c g C` — **Compose PATCH** prompt; `C-c g W` — **Compose REWRITE** prompt.
+- `C-c g v` — **Project review**: read all files in a project directory.
 
 ## Install
 
