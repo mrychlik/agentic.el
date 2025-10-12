@@ -65,10 +65,32 @@ Avoid destructive changes; prefer clear, minimal edits."
 ;; -------------------------------------------------------------------
 
 (defun agentic--ensure-gptel ()
-  "Ensure the `gptel` package is available or signal a friendly error."
-  (unless (featurep 'gptel)
-    (unless (require 'gptel nil t)
-      (user-error "agentic.el: this command needs the `gptel` package (install it)"))))
+  "Ensure the `gptel` package is available."
+  (unless (require 'gptel nil t)
+    (user-error "agentic: this command needs the `gptel` package (install it)")))
+
+(defun agentic--gptel-call (prompt &optional callback)
+  "Call gptel with PROMPT.
+If CALLBACK is non-nil and `gptel-request` exists, use it asynchronously,
+calling CALLBACK as (RESPONSE INFO). Otherwise fall back to synchronous
+`gptel-prompt` and return the response string."
+  (agentic--ensure-gptel)
+  (cond
+   ;; Prefer async if available and a callback is provided
+   ((and (fboundp 'gptel-request) callback)
+    (gptel-request prompt :callback callback)
+    :async)
+   ;; Synchronous prompt (older or simpler gptel)
+   ((fboundp 'gptel-prompt)
+    (gptel-prompt prompt))
+   ;; Last resort: emulate sync via request
+   ((fboundp 'gptel-request)
+    (let ((result nil) (done nil))
+      (gptel-request prompt :callback (lambda (resp info)
+                                        (setq result resp done t)))
+      (while (not done) (sleep-for 0.05))
+      result))
+   (t (user-error "agentic: gptel is loaded, but has neither gptel-prompt nor gptel-request"))))
 
 (defun agentic--ensure-magit ()
   "Ensure the `magit` package is available or signal a friendly error."
