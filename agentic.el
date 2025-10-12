@@ -33,7 +33,8 @@
   :prefix "agentic/")
 
 (defcustom agentic/echo-progress t
-  "If non-nil, show echo-area progress messages during GPT calls."
+  "If non-nil, show echo-area progress messages during GPT calls (e.g.,
+“contacting model…” and completion with elapsed seconds)."
   :type 'boolean :group 'agentic)
 
 (defcustom agentic/log-enabled t
