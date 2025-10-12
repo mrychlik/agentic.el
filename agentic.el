@@ -394,7 +394,7 @@ entire buffer is rewritten *in place*. You can always undo if needed."
          (original (buffer-substring-no-properties beg end))
          (prompt (format "Rewrite the following content per instruction.\nInstruction:\n%s\n\nContent:\n%s"
                          instruction original))
-         (response (gptel-prompt prompt))) ;; simple synchronous call
+         (response (agentic--gptel-request-sync prompt))) ;; simple synchronous call
     (when (and response (not (string-empty-p response)))
       (save-excursion
         (delete-region beg end)
