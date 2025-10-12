@@ -53,6 +53,7 @@ Check that `gptel` is installed and your API key is set:
 
 
 ## Binary/huge files during review
+
 The review command skips files with NUL bytes and enforces byte budgets. Increase:
 ```elisp
 (setq agentic/review-max-files 60
