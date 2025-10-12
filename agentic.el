@@ -64,10 +64,123 @@ Avoid destructive changes; prefer clear, minimal edits."
 ;; Lazy-loading helpers
 ;; -------------------------------------------------------------------
 
+;;;; --- gptel integration (no gptel-prompt) ---
+
 (defun agentic--ensure-gptel ()
   "Ensure the `gptel` package is available."
   (unless (require 'gptel nil t)
     (user-error "agentic: this command needs the `gptel` package (install it)")))
+
+(defun agentic--gptel-request-sync (prompt)
+  "Synchronously get a response for PROMPT using `gptel-request`."
+  (agentic--ensure-gptel)
+  (let ((result nil) (done nil))
+    (gptel-request prompt
+                   :callback (lambda (resp _info)
+                               (setq result resp done t)))
+    (while (not done) (sleep-for 0.05))
+    result))
+
+;;;###autoload
+(defun agentic/gpt-rewrite (instruction)
+  "Rewrite region or buffer using INSTRUCTION via GPT (gptel-request)."
+  (interactive "sRewrite instruction: ")
+  (agentic--ensure-gptel)
+  (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
+         (end (if (use-region-p) (region-end)       (point-max)))
+         (original (buffer-substring-no-properties beg end))
+         (root (when (fboundp 'agentic--project-root) (ignore-errors (agentic--project-root))))
+         (prompt (format "Rewrite the following content per instruction.\nInstruction:\n%s\n\nContent:\n%s"
+                         instruction original))
+         (here (current-buffer)))
+    (message "agentic: contacting model…")
+    (gptel-request
+     prompt
+     :callback
+     (lambda (response info)
+       (with-current-buffer here
+         (if (and response (not (string-empty-p response)))
+             (progn
+               (save-excursion
+                 (delete-region beg end)
+                 (goto-char beg)
+                 (insert response))
+               (message "agentic: rewrite applied."))
+           (user-error "agentic: empty response")))
+       (when (fboundp 'agentic--log)
+         (agentic--log "REWRITE" prompt response
+                       (list :project root
+                             :command "agentic/gpt-rewrite"
+                             :model   (plist-get info :model)
+                             :status  "ok")))))))
+
+;;;###autoload
+(defun agentic/gpt-patch-preview (prompt)
+  "Ask GPT for a unified diff for the current project and show it."
+  (interactive "sPatch prompt: ")
+  (agentic--ensure-gptel)
+  (let* ((root (if (fboundp 'agentic--project-root) (agentic--project-root) default-directory))
+         (full (format "You are an expert code editor. %s\n\nProject root: %s\n\nUser request:\n%s"
+                       (if (boundp 'agentic/system-prompt) agentic/system-prompt
+                         "Return a single unified diff; no prose, no fences.")
+                       root prompt)))
+    (message "agentic: contacting model…")
+    (gptel-request
+     full
+     :callback
+     (lambda (response info)
+       (unless (and response (not (string-empty-p response)))
+         (user-error "agentic: empty response"))
+       (with-current-buffer (get-buffer-create "*Agentic Diff*")
+         (erase-buffer)
+         (insert response)
+         (diff-mode)
+         (goto-char (point-min))
+         (pop-to-buffer (current-buffer)))
+       (message "agentic: preview ready.")
+       (when (fboundp 'agentic--log)
+         (agentic--log "PATCH PREVIEW" prompt response
+                       (list :project root
+                             :command "agentic/gpt-patch-preview"
+                             :model   (plist-get info :model)
+                             :status  "ok")))))))
+
+;;;###autoload
+(defun agentic/gpt-patch-apply (prompt)
+  "Ask GPT for a unified diff and apply it with `git apply`."
+  (interactive "sPatch prompt: ")
+  (agentic--ensure-gptel)
+  (let* ((root (if (fboundp 'agentic--project-root) (agentic--project-root) default-directory))
+         (default-directory root)
+         (full (format "You are an expert code editor. %s\n\nProject root: %s\n\nUser request:\n%s"
+                       (if (boundp 'agentic/system-prompt) agentic/system-prompt
+                         "Return a single unified diff; no prose, no fences.")
+                       root prompt)))
+    (message "agentic: contacting model…")
+    (gptel-request
+     full
+     :callback
+     (lambda (response info)
+       (unless (and response (not (string-empty-p response)))
+         (user-error "agentic: empty response"))
+       (let ((tmp (make-temp-file "agentic-diff-" nil ".patch")))
+         (unwind-protect
+             (progn
+               (with-temp-file tmp (insert response))
+               (condition-case err
+                   (progn
+                     (call-process "git" nil nil nil "apply" "--reject" "--whitespace=nowarn" tmp)
+                     (message "agentic: patch applied."))
+                 (error
+                  (message "%s" (cadr err))
+                  (user-error "agentic: patch failed; check *.rej via Magit"))))
+           (ignore-errors (delete-file tmp))))
+       (when (fboundp 'agentic--log)
+         (agentic--log "PATCH APPLY" prompt response
+                       (list :project root
+                             :command "agentic/gpt-patch-apply"
+                             :model   (plist-get info :model)
+                             :status  "applied")))))))
 
 (defun agentic--gptel-call (prompt &optional callback)
   "Call gptel with PROMPT.
