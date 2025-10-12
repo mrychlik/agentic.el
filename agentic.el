@@ -610,23 +610,22 @@ Falls back to a recursive scan if Git is unavailable."
   (let* ((root (agentic--project-root))
          (default-directory root)
          (candidates
-          (cond
-           ;; Use Git to respect .gitignore and include untracked (but not ignored)
-           ((executable-find "git")
-            (split-string
-             (with-output-to-string
-               (with-current-buffer standard-output
-                 (call-process "git" nil t nil "ls-files" "-co" "--exclude-standard")))
-             "\n" t))
-           ;; Fallback: naive recursive listing
-           (t (directory-files-recursively root ".*" nil
-                                           (lambda (f) (file-regular-p f)))))))
-    ;; Absolutize, keep only readable regular files first, then apply text heuristic
-    (let ((abs (mapcar (lambda (f) (expand-file-name f root)) candidates)))
-      (cl-remove-if-not
-       #'agentic--text-file-p
-       (cl-remove-if-not (lambda (p) (and (file-regular-p p) (file-readable-p p)))
-			 abs)))))
+          (if (executable-find "git")
+              ;; tracked + other untracked (but not ignored)
+              (split-string
+               (with-output-to-string
+                 (with-current-buffer standard-output
+                   (call-process "git" nil t nil "ls-files" "-co" "--exclude-standard")))
+               "\n" t)
+            ;; naive recursive fallback
+            (directory-files-recursively root ".*" nil
+                                         (lambda (f) (file-regular-p f)))))
+         (abs (mapcar (lambda (f) (expand-file-name f root)) candidates)))
+    ;; 1) keep only readable regular files, 2) apply text heuristic
+    (cl-remove-if-not #'agentic--text-file-p
+                      (cl-remove-if-not (lambda (p) (and (file-regular-p p)
+                                                         (file-readable-p p)))
+                                        abs))))
 
 (defun agentic--read-file-safely (path cap)
   "Read PATH up to CAP bytes and return a string.
