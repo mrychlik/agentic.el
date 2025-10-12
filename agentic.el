@@ -573,6 +573,13 @@ if you are satisfied."
     (agentic--call-process "git" "push" "--set-upstream" "origin" branch)
     (message "agentic: pushed %s to origin." branch)))
 
+;;;###autoload
+(defun agentic/open-log ()
+  "Open the Agentic interaction log buffer (`agentic/log-buffer`)."
+  (interactive)
+  (pop-to-buffer (get-buffer-create agentic/log-buffer)))
+
+
 ;; -------------------------------------------------------------------
 ;; Project review (read many files and request feedback)
 ;; -------------------------------------------------------------------
