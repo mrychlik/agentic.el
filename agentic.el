@@ -381,6 +381,7 @@ INFO may include a plist with :project, :command, :model, :status."
     (define-key m (kbd "C-c g R") #'agentic/forge-open-pr)
     (define-key m (kbd "C-c g C") #'agentic/gpt-compose-patch)
     (define-key m (kbd "C-c g W") #'agentic/gpt-compose-rewrite)
+    (define-key m (kbd "C-c g v") #'agentic/review-project)
     m)
   "Keymap for `agentic-mode`.")
 
