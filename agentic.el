@@ -32,6 +32,22 @@
   :group 'tools
   :prefix "agentic/")
 
+(defcustom agentic/echo-progress t
+  "If non-nil, show echo-area progress messages during GPT calls."
+  :type 'boolean :group 'agentic)
+
+(defcustom agentic/log-enabled t
+  "If non-nil, append GPT prompts and responses to `agentic/log-buffer`."
+  :type 'boolean :group 'agentic)
+
+(defcustom agentic/log-buffer "*Agentic Log*"
+  "Buffer name where agentic logs GPT prompts/responses."
+  :type 'string :group 'agentic)
+
+(defcustom agentic/auto-enable-gptel-logging t
+  "If non-nil, enable agentic's gptel progress+logging advices after gptel loads."
+  :type 'boolean :group 'agentic)
+
 (defcustom agentic/system-prompt
   "You are a careful software engineer. When asked for a patch,
 return a *single unified diff* rooted at the project root,
@@ -70,6 +86,104 @@ Avoid destructive changes; prefer clear, minimal edits."
 ;; Optional autoload stubs so byte-compile is quiet when forge isn't present.
 (autoload 'forge-get-repository "forge")
 (autoload 'forge-add-repository "forge")
+
+;; ---------- Helpers ----------
+
+(defun agentic--now () (float-time (current-time)))
+
+(defun agentic--log (header prompt response &optional info)
+  "Append a log entry with HEADER, PROMPT and RESPONSE to `agentic/log-buffer`.
+INFO may include a plist with :project, :command, :model, :status."
+  (when agentic/log-enabled
+    (with-current-buffer (get-buffer-create agentic/log-buffer)
+      (let ((inhibit-read-only t))
+        (unless (derived-mode-p 'outline-mode 'special-mode 'text-mode)
+          (text-mode))
+        (goto-char (point-max))
+        (insert
+         (format "\n--- %s --- %s\n" header (format-time-string "%Y-%m-%d %H:%M:%S"))
+         (when-let ((cmd (plist-get info :command)))
+           (format "Command: %s\n" cmd))
+         (when-let ((proj (plist-get info :project)))
+           (format "Project: %s\n" proj))
+         (when-let ((model (plist-get info :model)))
+           (format "Model: %s\n" model))
+         (when-let ((status (plist-get info :status)))
+           (format "Status: %s\n" status))
+         "\n# Prompt\n"
+         (or prompt "[no prompt]") "\n\n# Response\n"
+         (or response "[no response]") "\n")))))
+
+(defun agentic--plist-remove (plist key)
+  "Return a new PLIST with KEY removed (single occurrence)."
+  (let (out drop)
+    (while plist
+      (let ((k (pop plist)) (v (pop plist)))
+        (if (and (not drop) (eq k key))
+            (setq drop t)
+          (setq out (cons v (cons k out))))))
+    (nreverse out)))
+
+;; ---------- Advices for gptel ----------
+;; Wrap `gptel-request` (async) and `gptel-prompt` (sync) to:
+;;  - show progress messages with elapsed time
+;;  - append a small transcript to *Agentic Log*
+;; Enabled automatically once gptel is loaded.
+
+(defun agentic--enable-gptel-logging ()
+  "Enable agentic progress and logging around gptel calls."
+  (interactive)
+  (with-eval-after-load 'gptel
+    (unless (advice-member-p #'agentic--advice-gptel-request 'gptel-request)
+      (advice-add 'gptel-request :around #'agentic--advice-gptel-request))
+    (unless (advice-member-p #'agentic--advice-gptel-prompt 'gptel-prompt)
+      (advice-add 'gptel-prompt  :around #'agentic--advice-gptel-prompt))))
+
+(defun agentic--disable-gptel-logging ()
+  "Disable agentic progress and logging around gptel calls."
+  (interactive)
+  (with-eval-after-load 'gptel
+    (when (advice-member-p #'agentic--advice-gptel-request 'gptel-request)
+      (advice-remove 'gptel-request #'agentic--advice-gptel-request))
+    (when (advice-member-p #'agentic--advice-gptel-prompt 'gptel-prompt)
+      (advice-remove 'gptel-prompt  #'agentic--advice-gptel-prompt))))
+
+(cl-defun agentic--advice-gptel-request (orig prompt &rest keys &key callback &allow-other-keys)
+  "Around advice for `gptel-request` that logs and shows progress."
+  (let* ((t0 (agentic--now))
+         (cb callback)
+         (keys2 (agentic--plist-remove keys :callback)))
+    (when agentic/echo-progress
+      (message "agentic: contacting model…"))
+    (apply orig prompt
+           :callback
+           (lambda (response info)
+             (when agentic/echo-progress
+               (message "agentic: model done (%.1fs)" (- (agentic--now) t0)))
+             (agentic--log "GPTEL REQUEST"
+                           prompt response
+                           (list :command "gptel-request"
+                                 :model   (plist-get info :model)
+                                 :status  "ok"))
+             (when cb (funcall cb response info)))
+           keys2)))
+
+(defun agentic--advice-gptel-prompt (orig prompt &rest args)
+  "Around advice for `gptel-prompt` that logs and shows progress."
+  (let ((t0 (agentic--now)))
+    (when agentic/echo-progress
+      (message "agentic: contacting model…"))
+    (let ((resp (apply orig prompt args)))
+      (when agentic/echo-progress
+        (message "agentic: model done (%.1fs)" (- (agentic--now) t0)))
+      (agentic--log "GPTEL PROMPT" prompt resp
+                    (list :command "gptel-prompt" :status "ok"))
+      resp)))
+
+;; Enable automatically once gptel loads (no hard require at load time).
+(when agentic/auto-enable-gptel-logging
+  (ignore-errors (agentic--enable-gptel-logging)))
+
 
 ;; -------------------------------------------------------------------
 ;; Utilities
