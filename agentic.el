@@ -623,10 +623,10 @@ Falls back to a recursive scan if Git is unavailable."
                                            (lambda (f) (file-regular-p f)))))))
     ;; Absolutize, keep only readable regular files first, then apply text heuristic
     (let ((abs (mapcar (lambda (f) (expand-file-name f root)) candidates)))
-      (cl-remove-if-not #'agentic--text-file-p
-                        (cl-remove-if-not (lambda (p) (and (file-regular-p p)
-                                                           (file-readable-p p)))
-                                          abs)))))
+      (cl-remove-if-not
+       #'agentic--text-file-p
+       (cl-remove-if-not (lambda (p) (and (file-regular-p p) (file-readable-p p)))
+			 abs)))))
 
 (defun agentic--read-file-safely (path cap)
   "Read PATH up to CAP bytes; return string (note truncation if any)."
