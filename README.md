@@ -36,3 +36,16 @@ To install the package using `straight.el`, add the following configuration to y
 ```
 
 Incorporate agentic.el into your Emacs setup to simplify your development process with intelligent tools powered by GPT. Enjoy a seamless coding experience with version control integration and collaborative features at your fingertips!
+
+## Troubleshooting
+
+**No output / nothing inserted?**  
+Use `C-u C-c RET` in a gptel buffer to open the routing menu and ensure
+output isn’t redirected elsewhere. `agentic.el` calls the request API
+directly; if the model returns no text it will warn instead of erroring.
+
+**“Contacting model…” but nothing happens.**  
+Check that `gptel` is installed and your API key is set:
+```elisp
+(use-package gptel :straight t)
+(setq gptel-api-key (getenv "OPENAI_API_KEY"))
