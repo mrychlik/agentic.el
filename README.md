@@ -22,6 +22,7 @@ Agentic.el activates specific keybindings when `agentic-mode` is enabled, allowi
 - `C-c g C` — **Compose PATCH**: Open a prompt to compose a patch.
 - `C-c g W` — **Compose REWRITE**: Open a prompt to compose a rewrite instruction.
 - `C-c g v` — **Project review**: Read and review all files within the current project directory.
+- `C-c g l` — **Open log file**: Show the ChatGPT interaction log.
 
 ### Installation
 
