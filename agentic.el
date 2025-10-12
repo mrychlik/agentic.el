@@ -388,6 +388,7 @@ INFO may include :project :command :model :status. Never signals on nils."
     (define-key m (kbd "C-c g C") #'agentic/gpt-compose-patch)
     (define-key m (kbd "C-c g W") #'agentic/gpt-compose-rewrite)
     (define-key m (kbd "C-c g v") #'agentic/review-project)
+    (define-key m (kbd "C-c g l") #'agentic/open-log)    
     m)
   "Keymap for `agentic-mode`.")
 
