@@ -90,124 +90,8 @@ Always returns a string (\"\" if the model produced none)."
     ;; Wait without busy-spinning.
     (while (eq result :pending)
       (accept-process-output nil 0.05))
-    result))
+    result)))
 
-
-(defun agentic--gptel-request-sync (prompt)
-  "Synchronously get a response for PROMPT using `gptel-request`."
-  (agentic--ensure-gptel)
-  (let ((result nil) (done nil))
-    (gptel-request prompt
-                   :callback (lambda (resp _info)
-                               (setq result resp done t)))
-    (while (not done) (sleep-for 0.05))
-    result))
-
-;;;###autoload
-(defun agentic/gpt-rewrite (instruction)
-  "Rewrite region or buffer using INSTRUCTION via gptel-request."
-  (interactive "sRewrite instruction: ")
-  (agentic--ensure-gptel)
-  (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
-         (end (if (use-region-p) (region-end)       (point-max)))
-         ;; Markers survive user edits while the model is thinking:
-         (mbeg (copy-marker beg))
-         (mend (copy-marker end t))         ; right-inserting
-         (original (buffer-substring-no-properties beg end))
-         (root (when (fboundp 'agentic--project-root)
-                 (ignore-errors (agentic--project-root))))
-         (prompt (format "Rewrite the following content per instruction.\nInstruction:\n%s\n\nContent:\n%s"
-                         instruction original))
-         (here (current-buffer)))
-    (message "agentic: contacting model…")
-    (let ((response (agentic--gptel-request-sync prompt)))
-      (when (buffer-live-p here)
-        (with-current-buffer here
-          (if (and (stringp response)
-                   (not (string-empty-p response)))
-              (progn
-                (save-excursion
-                  (delete-region (marker-position mbeg) (marker-position mend))
-                  (goto-char (marker-position mbeg))
-                  (insert response))
-                (message "agentic: rewrite applied."))
-            (message "agentic: empty response (check routing: C-u C-c RET in gptel to ensure output is not redirected)."))))
-      ;; free markers
-      (set-marker mbeg nil) (set-marker mend nil)
-      ;; log if available
-      (when (fboundp 'agentic--log)
-        (agentic--log "REWRITE" prompt response
-                      (list :project root
-                            :command "agentic/gpt-rewrite"
-                            :status (if (string-empty-p response) "empty" "ok")))))))
-
-;;;###autoload
-(defun agentic/gpt-patch-preview (prompt)
-  "Ask GPT for a unified diff for the current project and show it."
-  (interactive "sPatch prompt: ")
-  (agentic--ensure-gptel)
-  (let* ((root (if (fboundp 'agentic--project-root) (agentic--project-root) default-directory))
-         (full (format "You are an expert code editor. %s\n\nProject root: %s\n\nUser request:\n%s"
-                       (if (boundp 'agentic/system-prompt) agentic/system-prompt
-                         "Return a single unified diff; no prose, no fences.")
-                       root prompt)))
-    (message "agentic: contacting model…")
-    (gptel-request
-     full
-     :callback
-     (lambda (response info)
-       (unless (and response (not (string-empty-p response)))
-         (user-error "agentic: empty response"))
-       (with-current-buffer (get-buffer-create "*Agentic Diff*")
-         (erase-buffer)
-         (insert response)
-         (diff-mode)
-         (goto-char (point-min))
-         (pop-to-buffer (current-buffer)))
-       (message "agentic: preview ready.")
-       (when (fboundp 'agentic--log)
-         (agentic--log "PATCH PREVIEW" prompt response
-                       (list :project root
-                             :command "agentic/gpt-patch-preview"
-                             :model   (plist-get info :model)
-                             :status  "ok")))))))
-
-;;;###autoload
-(defun agentic/gpt-patch-apply (prompt)
-  "Ask GPT for a unified diff and apply it with `git apply`."
-  (interactive "sPatch prompt: ")
-  (agentic--ensure-gptel)
-  (let* ((root (if (fboundp 'agentic--project-root) (agentic--project-root) default-directory))
-         (default-directory root)
-         (full (format "You are an expert code editor. %s\n\nProject root: %s\n\nUser request:\n%s"
-                       (if (boundp 'agentic/system-prompt) agentic/system-prompt
-                         "Return a single unified diff; no prose, no fences.")
-                       root prompt)))
-    (message "agentic: contacting model…")
-    (gptel-request
-     full
-     :callback
-     (lambda (response info)
-       (unless (and response (not (string-empty-p response)))
-         (user-error "agentic: empty response"))
-       (let ((tmp (make-temp-file "agentic-diff-" nil ".patch")))
-         (unwind-protect
-             (progn
-               (with-temp-file tmp (insert response))
-               (condition-case err
-                   (progn
-                     (call-process "git" nil nil nil "apply" "--reject" "--whitespace=nowarn" tmp)
-                     (message "agentic: patch applied."))
-                 (error
-                  (message "%s" (cadr err))
-                  (user-error "agentic: patch failed; check *.rej via Magit"))))
-           (ignore-errors (delete-file tmp))))
-       (when (fboundp 'agentic--log)
-         (agentic--log "PATCH APPLY" prompt response
-                       (list :project root
-                             :command "agentic/gpt-patch-apply"
-                             :model   (plist-get info :model)
-                             :status  "applied")))))))
 
 (defun agentic--gptel-call (prompt &optional callback)
   "Call gptel with PROMPT.
@@ -651,31 +535,6 @@ Never returns nil; unreadable files yield \"\"."
     (error "")))
 
 
-(defun agentic--project-root ()
-  (or (when-let ((pr (project-current t))) (project-root pr))
-      (user-error "agentic: not in a project")))
-
-(defun agentic--list-project-files ()
-  "Return a list of tracked text files respecting .gitignore; fall back to recursive scan."
-  (let* ((root (agentic--project-root))
-         (default-directory root)
-         (files
-          (cond
-           ((executable-find "git")
-            ;; -c (cached tracked), -o (others), --exclude-standard respects .gitignore
-            ;; Filter with git's text heuristic: we’ll recheck locally.
-            (split-string
-             (with-output-to-string
-               (with-current-buffer standard-output
-                 (call-process "git" nil t nil "ls-files" "-co" "--exclude-standard")))
-             "\n" t))
-           (t
-            (directory-files-recursively root ".*" nil
-                                         (lambda (f) (file-regular-p f)))))))
-    ;; Absolute paths, text-only
-    (cl-remove-if-not
-     #'agentic--text-file-p
-     (mapcar (lambda (f) (expand-file-name f root)) files))))
 
 (defun agentic--build-review-prompt (root files)
   "Build a structured prompt from FILES in ROOT under size budgets."
