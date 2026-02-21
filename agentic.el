@@ -22,6 +22,8 @@
 ;;; Code:
 
 (require 'project) ;; built-in
+(require 'gptel)  
+(require 'forge)
 
 ;; -------------------------------------------------------------------
 ;; Customization
