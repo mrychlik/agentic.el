@@ -90,7 +90,7 @@ Always returns a string (\"\" if the model produced none)."
     ;; Wait without busy-spinning.
     (while (eq result :pending)
       (accept-process-output nil 0.05))
-    result))
+    result)))
 
 
 (defun agentic--gptel-call (prompt &optional callback)

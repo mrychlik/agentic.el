@@ -51,6 +51,7 @@ Check that `gptel` is installed and your API key is set:
 (use-package gptel :straight t)
 (setq gptel-api-key (getenv "OPENAI_API_KEY"))
 
+```
 
 ## Binary/huge files during review
 
@@ -59,3 +60,4 @@ The review command skips files with NUL bytes and enforces byte budgets. Increas
 (setq agentic/review-max-files 60
       agentic/review-max-bytes-per-file 40000
       agentic/review-total-byte-budget 500000)
+```
