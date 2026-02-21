@@ -596,21 +596,44 @@ Never returns nil; unreadable files yield \"\"."
 ;; Forge: open PR
 ;; -------------------------------------------------------------------
 
+(defun agentic--forge-credentials-help ()
+  "Return short setup instructions for Forge/GitHub credentials."
+  (string-join
+   '("Forge authenticates to GitHub via `ghub` and `auth-source`."
+     "Add a Personal Access Token entry such as:"
+     "  machine api.github.com login YOUR_GITHUB_USERNAME password YOUR_TOKEN"
+     "Store it in `~/.authinfo.gpg` (recommended) or another file from `auth-sources`."
+     "You can also run `M-x ghub-create-token` to generate/store a token interactively.")
+   "\n"))
+
+(defun agentic--signal-forge-auth-error (err)
+  "Raise a user-facing Forge authentication error from ERR."
+  (let ((msg (error-message-string err)))
+    (if (string-match-p "[Bb]ad credentials\\|401\\|403" msg)
+        (user-error "agentic: Forge authentication failed (%s).\n\n%s"
+                    msg
+                    (agentic--forge-credentials-help))
+      (signal (car err) (cdr err)))))
+
 ;;;###autoload
-(defun agentic/forge-open-pr (title body)
+(defun agentic/forge-open-pr ()
   "Open a GitHub pull request for the current branch via Forge.
 
-TITLE and BODY are used to populate the PR. Ensure `forge` is configured
-for this repository (`M-x forge-add-repository` first time)."
-  (interactive "sPR title: \nsPR body: ")
+Ensure `forge` is configured for this repository
+(`M-x forge-add-repository` first time). If Forge reports a credentials error,
+configure GitHub credentials for `ghub` in `auth-source` (see helper message)."
+  (interactive)
   (agentic--ensure-forge)
   (let ((repo (or (forge-get-repository t)
                   (progn (call-interactively #'forge-add-repository)
                          (forge-get-repository t)))))
     (unless repo (user-error "agentic: no Forge repository configured"))
     (magit-push-current-to-pushremote nil)
-    (forge-create-pullreq repo title body)
-    (message "agentic: PR created (check your browser or Forge buffer).")))
+    (condition-case err
+        (progn
+          (forge-create-pullreq)
+          (message "agentic: PR submit buffer opened (complete title/body in Forge)."))
+      (error (agentic--signal-forge-auth-error err)))))
 
 (provide 'agentic)
 ;;; agentic.el ends here
