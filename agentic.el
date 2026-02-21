@@ -594,6 +594,33 @@ Never returns nil; unreadable files yield \"\"."
 ;; Forge: open PR
 ;; -------------------------------------------------------------------
 
+(defun agentic--forge-credentials-help ()
+  "Return short setup instructions for Forge/GitHub credentials."
+  (string-join
+   '("Forge authenticates to GitHub via `ghub` and `auth-source`."
+     "Add a Personal Access Token entry such as:"
+     "  machine api.github.com login YOUR_GITHUB_USERNAME^forge password YOUR_TOKEN"
+     "(`login USERNAME^forge` is recommended so Forge/ghub can select the token reliably.)"
+     "Store it in `~/.authinfo.gpg` (recommended) or another file from `auth-sources`."
+     "You can also run `M-x ghub-create-token` to generate/store a token interactively.")
+   "\n"))
+
+
+(defun agentic--forge-auth-source-configured-p ()
+  "Return non-nil when auth-source has a likely GitHub token for Forge/ghub."
+  (and (require 'auth-source nil t)
+       (or (auth-source-search :host "api.github.com" :max 1 :require '(:secret))
+           (auth-source-search :host "github.com" :max 1 :require '(:secret)))))
+
+(defun agentic--signal-forge-auth-error (err)
+  "Raise a user-facing Forge authentication error from ERR."
+  (let ((msg (error-message-string err)))
+    (if (string-match-p "[Bb]ad credentials\\|401\\|403" msg)
+        (user-error "agentic: Forge authentication failed (%s).\n\n%s"
+                    msg
+                    (agentic--forge-credentials-help))
+      (signal (car err) (cdr err)))))
+
 ;;;###autoload
 (defun agentic/forge-open-pr ()
   "Open a GitHub pull request for the current branch via Forge.
@@ -607,6 +634,9 @@ Forge's submit buffer, matching `forge-create-pullreq`'s documented workflow."
                   (progn (call-interactively #'forge-add-repository)
                          (forge-get-repository t)))))
     (unless repo (user-error "agentic: no Forge repository configured"))
+    (unless (agentic--forge-auth-source-configured-p)
+      (user-error "agentic: no GitHub credentials found in `auth-source`.\n\n%s"
+                  (agentic--forge-credentials-help)))
     (magit-push-current-to-pushremote nil)
     (forge-create-pullreq)
     (message "agentic: PR submit buffer opened (complete title/body in Forge).")))
