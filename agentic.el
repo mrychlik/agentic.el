@@ -595,20 +595,21 @@ Never returns nil; unreadable files yield \"\"."
 ;; -------------------------------------------------------------------
 
 ;;;###autoload
-(defun agentic/forge-open-pr (title body)
+(defun agentic/forge-open-pr ()
   "Open a GitHub pull request for the current branch via Forge.
 
-TITLE and BODY are used to populate the PR. Ensure `forge` is configured
-for this repository (`M-x forge-add-repository` first time)."
-  (interactive "sPR title: \nsPR body: ")
+Ensure `forge` is configured for this repository
+(`M-x forge-add-repository` first time).  The PR title/body are entered in
+Forge's submit buffer, matching `forge-create-pullreq`'s documented workflow."
+  (interactive)
   (agentic--ensure-forge)
   (let ((repo (or (forge-get-repository t)
                   (progn (call-interactively #'forge-add-repository)
                          (forge-get-repository t)))))
     (unless repo (user-error "agentic: no Forge repository configured"))
     (magit-push-current-to-pushremote nil)
-    (forge-create-pullreq repo title body)
-    (message "agentic: PR created (check your browser or Forge buffer).")))
+    (forge-create-pullreq)
+    (message "agentic: PR submit buffer opened (complete title/body in Forge).")))
 
 (provide 'agentic)
 ;;; agentic.el ends here
