@@ -50,6 +50,7 @@ Check that `gptel` is installed and your API key is set:
 ```elisp
 (use-package gptel :straight t)
 (setq gptel-api-key (getenv "OPENAI_API_KEY"))
+
 ```
 
 ## Binary/huge files during review
