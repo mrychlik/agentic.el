@@ -22,8 +22,6 @@
 ;;; Code:
 
 (require 'project) ;; built-in
-(require 'gptel)  
-(require 'forge)
 
 ;; -------------------------------------------------------------------
 ;; Customization
@@ -628,8 +626,8 @@ Never returns nil; unreadable files yield \"\"."
   "Open a GitHub pull request for the current branch via Forge.
 
 Ensure `forge` is configured for this repository
-(`M-x forge-add-repository` first time). If Forge reports a credentials error,
-configure GitHub credentials for `ghub` in `auth-source` (see helper message)."
+(`M-x forge-add-repository` first time).  The PR title/body are entered in
+Forge's submit buffer, matching `forge-create-pullreq`'s documented workflow."
   (interactive)
   (agentic--ensure-forge)
   (let ((repo (or (forge-get-repository t)
@@ -640,11 +638,8 @@ configure GitHub credentials for `ghub` in `auth-source` (see helper message)."
       (user-error "agentic: no GitHub credentials found in `auth-source`.\n\n%s"
                   (agentic--forge-credentials-help)))
     (magit-push-current-to-pushremote nil)
-    (condition-case err
-        (progn
-          (forge-create-pullreq)
-          (message "agentic: PR submit buffer opened (complete title/body in Forge)."))
-      (error (agentic--signal-forge-auth-error err)))))
+    (forge-create-pullreq)
+    (message "agentic: PR submit buffer opened (complete title/body in Forge).")))
 
 (provide 'agentic)
 ;;; agentic.el ends here

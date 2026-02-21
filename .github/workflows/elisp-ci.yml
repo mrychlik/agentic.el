@@ -1,9 +1,11 @@
-name: Elisp CI
+name: Manual workflow
 
 on:
   push:
     branches: ["main"]
   pull_request:
+  workflow_dispatch: # Enables manual triggering
+
 
 jobs:
   byte-compile:
