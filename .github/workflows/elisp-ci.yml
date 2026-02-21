@@ -1,11 +1,9 @@
-name: Elisp CI
+name: Manual workflow
 
 on:
   push:
     branches: ["main"]
   pull_request:
-
-name: Manual workflow
 
 on: 
   workflow_dispatch: # Enables manual triggering
