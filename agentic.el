@@ -601,10 +601,18 @@ Never returns nil; unreadable files yield \"\"."
   (string-join
    '("Forge authenticates to GitHub via `ghub` and `auth-source`."
      "Add a Personal Access Token entry such as:"
-     "  machine api.github.com login YOUR_GITHUB_USERNAME password YOUR_TOKEN"
+     "  machine api.github.com login YOUR_GITHUB_USERNAME^forge password YOUR_TOKEN"
+     "(`login USERNAME^forge` is recommended so Forge/ghub can select the token reliably.)"
      "Store it in `~/.authinfo.gpg` (recommended) or another file from `auth-sources`."
      "You can also run `M-x ghub-create-token` to generate/store a token interactively.")
    "\n"))
+
+
+(defun agentic--forge-auth-source-configured-p ()
+  "Return non-nil when auth-source has a likely GitHub token for Forge/ghub."
+  (and (require 'auth-source nil t)
+       (or (auth-source-search :host "api.github.com" :max 1 :require '(:secret))
+           (auth-source-search :host "github.com" :max 1 :require '(:secret)))))
 
 (defun agentic--signal-forge-auth-error (err)
   "Raise a user-facing Forge authentication error from ERR."
@@ -628,6 +636,9 @@ configure GitHub credentials for `ghub` in `auth-source` (see helper message)."
                   (progn (call-interactively #'forge-add-repository)
                          (forge-get-repository t)))))
     (unless repo (user-error "agentic: no Forge repository configured"))
+    (unless (agentic--forge-auth-source-configured-p)
+      (user-error "agentic: no GitHub credentials found in `auth-source`.\n\n%s"
+                  (agentic--forge-credentials-help)))
     (magit-push-current-to-pushremote nil)
     (condition-case err
         (progn
